@@ -61,7 +61,7 @@ def select_courses():
     response = requests.get(config['canvas_api_heading'] + '/api/v1/courses',
             headers=header, params=param)
     if response.status_code ==401:
-        print('Unauthorized; Check API Key')
+        print('Unauthorized! Check Canvas API Key')
         exit()
 
     if config['courses']:
@@ -101,7 +101,7 @@ def load_assignments():
         str(course_id) + '/assignments', headers=header,
         params=param)
         if response.status_code ==401:
-            print('Unauthorized; Check API Key')
+            print('Unauthorized! Check Canvas API Key')
             exit()
         for assignment in response.json():
             assignments.append(assignment)
