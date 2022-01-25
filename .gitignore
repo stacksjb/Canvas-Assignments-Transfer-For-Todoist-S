@@ -149,12 +149,9 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
-<<<<<<< HEAD
-=======
 .idea
 
 config.json
->>>>>>> 93b653da4e173480f039ce7c87830f7bf52075e1
 # PyCharm
 #  JetBrains specific template is maintainted in a separate JetBrains.gitignore that can
 #  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
@@ -163,10 +160,3 @@ config.json
 #.idea/
 
 # End of https://www.toptal.com/developers/gitignore/api/python
-<<<<<<< HEAD
-
-.idea
-
-config*.json
-=======
->>>>>>> 93b653da4e173480f039ce7c87830f7bf52075e1
