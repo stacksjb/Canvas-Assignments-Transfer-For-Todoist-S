@@ -134,7 +134,7 @@ def create_todoist_projects():
 
             todoist_project_dict[project['name']] = project['id']
         else:
-            print("the key was in dict, don't create project")
+            print(f"- Project \"{courses_id_name_dict[course_id]}\" already exists: not creating new project.")
 
 # Transfers over assignments from canvas over to Todoist, the method Checks
 # to make sure the assignment has not already been trasnfered to prevent overlap
