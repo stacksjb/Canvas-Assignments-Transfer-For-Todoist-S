@@ -154,7 +154,11 @@ def transfer_assignments_to_todoist():
                 print(f"{i + 1}. Assignment already synced: \"{assignment['name']}\"")
                 is_added = True
                 # print(assignment)
+<<<<<<< HEAD
                 if (task['due'] and task['due'].get('date') != assignment.get('due_at')):
+=======
+                if (task['due'] and task['due']['date'] != assignment['due_at']):
+>>>>>>> 93b653da4e173480f039ce7c87830f7bf52075e1
                     is_synced = False
                     item = task
                     print(f"  - Updating assignment due date: \"{assignment['name']}\" from [{task['due'].get('date')}] to [{assignment['due_at']}]")
