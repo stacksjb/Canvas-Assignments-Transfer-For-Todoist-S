@@ -7,7 +7,7 @@ from requests.auth import HTTPDigestAuth
 # Loaded configuration files
 config = {}
 header = {}
-param = {'per_page': '100', 'include':'submission'}
+param = {'per_page': '100', 'include': 'submission'}
 course_ids = []
 assignments = []
 todoist_tasks = []
@@ -19,15 +19,15 @@ def main():
     print(" #     Canvas-Assignments-Transfer-For-Todoist     #")
     print("###################################################\n")
     initialize_api()
-    print("API INITIALIZED")
+    print("# API INITIALIZED")
     select_courses()
-    print("Working...")
+    print("# Working...")
     load_todoist_projects()
     load_assignments()
     load_todoist_tasks()
     create_todoist_projects()
     transfer_assignments_to_todoist()
-    print("Done!")
+    print("# Done!")
 
 # Makes sure that the user has their api keys set up and sets api variables
 def initialize_api():
@@ -65,7 +65,7 @@ def select_courses():
         exit()
 
     if config['courses']:
-        use_previous_input = input("You have previously selected courses. Would you like to use the courses selected last time? (y/n) ")
+        use_previous_input = input(" - You have previously selected courses. Would you like to use the courses selected last time? (y/n) ")
         print("")
         if use_previous_input == "y" or use_previous_input == "Y":
             for course_id in config['courses']:
@@ -134,13 +134,13 @@ def create_todoist_projects():
 
             todoist_project_dict[project['name']] = project['id']
         else:
-            print(f"- Project \"{courses_id_name_dict[course_id]}\" already exists: not creating new project.")
+            print(f" - Project \"{courses_id_name_dict[course_id]}\" already exists: not creating new project.")
 
 # Transfers over assignments from canvas over to Todoist, the method Checks
 # to make sure the assignment has not already been trasnfered to prevent overlap
 def transfer_assignments_to_todoist():
     print("# Transferring assignments to Todoist")
-    for assignment in assignments:
+    for i, assignment in enumerate(assignments):
         course_name = courses_id_name_dict[assignment['course_id']]
         assignment_name = assignment['name']
         project_id = todoist_project_dict[course_name]
@@ -151,26 +151,25 @@ def transfer_assignments_to_todoist():
         for task in todoist_tasks:
             if task['content'] == ('[' + assignment['name'] + '](' + assignment['html_url'] + ')' + ' Due') and \
             task['project_id'] == project_id:
-                print("Assignment already synced: " + assignment['name'])
+                print(f"{i + 1}. Assignment already synced: \"{assignment['name']}\"")
                 is_added = True
                 # print(assignment)
-                if (task['due'] and task['due'].get('date') != assignment.get('due_date')):
+                if (task['due'] and task['due'].get('date') != assignment.get('due_at')):
                     is_synced = False
-                    # print(task)
-                    # print(assignment)
                     item = task
-                    print("Updating assignment due date: " + assignment['name'] + " to " + assignment['due_at'])
-                    break;
+                    print(f"  - Updating assignment due date: \"{assignment['name']}\" from [{task['due'].get('date')}] to [{assignment['due_at']}]")
+                    break
             # print(assignment)
 
         if not is_added:
             if assignment['submission']['submitted_at'] == None:
-                print("Adding assignment: " + assignment['name'])
+                print(f"{i + 1}. Adding assignment: " + assignment['name'])
                 add_new_task(assignment, project_id)
             else:
-                print("INFO: Assignment already submitted: " + assignment['name'])
+                print(f"{i + 1}. Assignment already exists: " + assignment['name'])
         elif not is_synced:
-                update_task(assignment, item)
+            print(f"{i + 1}. Updating assignment: " + assignment['name'])
+            update_task(assignment, item)
 
         #     print("assignment already synced")
     todoist_api.commit()
