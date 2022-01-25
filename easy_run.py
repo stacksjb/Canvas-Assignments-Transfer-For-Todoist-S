@@ -114,6 +114,7 @@ def load_todoist_tasks():
 
 # Loads all user projects from Todoist
 def load_todoist_projects():
+    print("# Loading Todoist projects...")
     projects = todoist_api.state['projects']
     for project in projects:
         todoist_project_dict[project['name']] = project['id']
@@ -122,10 +123,13 @@ def load_todoist_projects():
 # Checks to see if the user has a project matching their course names, if there
 # isn't a new project will be created
 def create_todoist_projects():
+    print("# Creating Todoist projects")
     for course_id in course_ids:
         if courses_id_name_dict[course_id] not in todoist_project_dict:
+            # TODO: Add option to re-name course names
+
             project = todoist_api.projects.add(courses_id_name_dict[course_id])
-            todoist_api.commit();
+            todoist_api.commit()
             todoist_api.sync()
 
             todoist_project_dict[project['name']] = project['id']
@@ -135,6 +139,7 @@ def create_todoist_projects():
 # Transfers over assignments from canvas over to Todoist, the method Checks
 # to make sure the assignment has not already been trasnfered to prevent overlap
 def transfer_assignments_to_todoist():
+    print("# Transferring assignments to Todoist")
     for assignment in assignments:
         course_name = courses_id_name_dict[assignment['course_id']]
         assignment_name = assignment['name']
@@ -160,10 +165,10 @@ def transfer_assignments_to_todoist():
 
         if not is_added:
             if assignment['submission']['submitted_at'] == None:
-                print("Adding assignment " + assignment['name'])
+                print("Adding assignment: " + assignment['name'])
                 add_new_task(assignment, project_id)
             else:
-                print("assignment already submitted " + assignment['name'])
+                print("INFO: Assignment already submitted: " + assignment['name'])
         elif not is_synced:
                 update_task(assignment, item)
 
