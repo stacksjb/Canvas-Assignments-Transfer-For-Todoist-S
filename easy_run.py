@@ -163,12 +163,12 @@ def transfer_assignments_to_todoist():
 
         if not is_added:
             if assignment['submission']['submitted_at'] == None:
-                print(f"{i + 1}. Adding assignment: " + assignment['name'])
+                print(f"{i + 1}. Adding assignment: \"{assignment['name']}\", due: {assignment['due_at']}")
                 add_new_task(assignment, project_id)
             else:
-                print(f"{i + 1}. Assignment already exists: " + assignment['name'])
+                print(f"{i + 1}. Assignment already exists: \"assignment['name']\", due: {assignment['due_at']}")
         elif not is_synced:
-            print(f"{i + 1}. Updating assignment: " + assignment['name'])
+            print(f"{i + 1}. Updating assignment: \"assignment['name']\", due: {assignment['due_at']}")
             update_task(assignment, item)
 
         #     print("assignment already synced")
