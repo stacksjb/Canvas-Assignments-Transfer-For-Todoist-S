@@ -158,8 +158,10 @@ def create_todoist_projects():
             todoist_api.sync()
 
             todoist_project_dict[project['name']] = project['id']
+            print(f" - OK: Created Project: \"{course_name}\"")
         else:
-            print(f" - Project \"{course_name}\" already exists: not creating new project.")
+            print(f" - INFO: \"{course_name}\" already exists; skipping...")
+    print()
 
 
 # Transfers over assignments from canvas over to Todoist, the method Checks
