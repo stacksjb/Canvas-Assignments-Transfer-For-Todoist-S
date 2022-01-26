@@ -1,17 +1,16 @@
-from pprint import pprint
-
-from pick import pick
-import requests
-import re
 import json
-from todoist.api import TodoistAPI
-from requests.auth import HTTPDigestAuth
+from operator import itemgetter
+
+import requests
 from canvasapi import Canvas
+from pick import pick
+from todoist.api import TodoistAPI
+
 # Loaded configuration files
 config = {}
 header = {}
 param = {'per_page': '100', 'include': 'submission'}
-course_ids = []
+course_ids = {}
 assignments = []
 todoist_tasks = []
 courses_id_name_dict = {}
@@ -25,9 +24,8 @@ def main():
     print(" #     Canvas-Assignments-Transfer-For-Todoist     #")
     print("###################################################\n")
     initialize_api()
-    print("# API INITIALIZED")
     select_courses()
-    print("# Working...")
+
     load_todoist_projects()
     load_assignments()
     load_todoist_tasks()
@@ -61,64 +59,58 @@ def initialize_api():
     todoist_api.reset_state()
     todoist_api.sync()
     header.update({"Authorization": "Bearer " + config['canvas_api_key'].strip()})
+    print("# API INITIALIZED")
 
 
 # Allows the user to select the courses that they want to transfer while generating a dictionary
 # that has course ids as the keys and their names as the values
 def select_courses():
     global config
-
+    print("# Fetching courses from Canvas:")
     canvas = Canvas("https://canvas.instructure.com", config['canvas_api_key'])
+    courses_pag = canvas.get_courses()
 
-    courses = canvas.get_courses()
-
-    print(courses)
-    for course in courses:
+    i = 1
+    for c in courses_pag:
         try:
-            print(course.name)
+            courses_id_name_dict[c.id] = f"{c.course_code.replace(' ', '')} - {c.name} [{c.id}]"
+            i += 1
         except AttributeError:
-            print("Course has no name")
-    return
+            print(" - Skipping invalid course entry.")
+
+    print(f"=> Found {len(courses_id_name_dict)} courses")
+
     if config['courses']:
-        use_previous_input = input(
-            " - You have previously selected courses. Would you like to use the courses selected last time? (y/n) ")
+        print()
+        print("# You have previously selected courses:")
+        for i, (c_id, c_name) in enumerate(config['courses'].items()):
+            print(f' {i + 1}) {c_name} [{c_id}]')
+
+        use_previous_input = input("Would you like to use the courses selected last time? (y/n) ")
         print("")
         if use_previous_input.lower() == "y":
-            for course_id in config['courses']:
-                # print(course_id)
-                course_ids.append(int(course_id))
-            for course in courses:
-                courses_id_name_dict[course.get('id', None)] = re.sub(r'[^-a-zA-Z0-9._\s]', '', course.get('name', ''))
+            for c_id, c_name in config['courses'].items():
+                course_ids[c_id] = c_name
             return
-
-    # If the user does not choose to use courses selected last time
-    for i, course in enumerate(response.json()):
-        if course.get('name', '') != '':
-            courses_id_name_dict[course.get('id', None)] = re.sub(r'[^-a-zA-Z0-9._\s]', '', course.get('name', ''))
-
-        # if course.get('name') is not None:
-            # print(f"{i + 1}) {courses_id_name_dict[course.get('id', '')]}: {course.get('id', '')}")
-
-    # print()
-    # print("Enter the courses you would like to add to Todoist by "
-    #       "entering the numbers of the items you would like to select. "
-    #       "Please separate each number with spaces")
 
     title = "Select the course(s) you would like to add to Todoist (press SPACE to mark, ENTER to continue):"
 
-    selected = pick(list(courses_id_name_dict.values()), title, multiselect=True, min_selection_count=1)
+    sorted_ids, sorted_courses = zip(*sorted(courses_id_name_dict.items(), key=itemgetter(0)))
 
+    selected = pick(sorted_courses, title, multiselect=True, min_selection_count=1)
 
-    # my_input = input(input_prompt)
-    # input_array = my_input.split()
-
-    print(selected)
-    for item in selected:
-        course_ids.append(response.json()[int(item) - 1].get('id', None))
+    print("# SELECTED COURSES:")
+    print("# If you would like to rename a course as it appears on Todoist, enter the new name below.")
+    print("# To use the course name as it appears on Canvas, leave the field blank.")
+    for i, (course_name, index) in enumerate(selected):
+        course_id = sorted_ids[index]
+        course_name_prev = course_name
+        print(f" {i + 1}) {course_name_prev}")
+        course_name_new = input("    - Project Name: ")
+        course_ids[course_id] = course_name_new
 
     # write course ids to config.json
     config['courses'] = course_ids
-    print(config)
     with open("config.json", "w") as outfile:
         json.dump(config, outfile)
 
@@ -157,17 +149,17 @@ def load_todoist_projects():
 # isn't a new project will be created
 def create_todoist_projects():
     print("# Creating Todoist projects")
-    for course_id in course_ids:
-        if courses_id_name_dict[course_id] not in todoist_project_dict:
+    for course_id, course_name in course_ids.items():
+        if course_name not in todoist_project_dict:
             # TODO: Add option to re-name course names
 
-            project = todoist_api.projects.add(courses_id_name_dict[course_id])
+            project = todoist_api.projects.add(course_name)
             todoist_api.commit()
             todoist_api.sync()
 
             todoist_project_dict[project['name']] = project['id']
         else:
-            print(f" - Project \"{courses_id_name_dict[course_id]}\" already exists: not creating new project.")
+            print(f" - Project \"{course_name}\" already exists: not creating new project.")
 
 
 # Transfers over assignments from canvas over to Todoist, the method Checks
@@ -175,8 +167,7 @@ def create_todoist_projects():
 def transfer_assignments_to_todoist():
     print("# Transferring assignments to Todoist")
     for i, assignment in enumerate(assignments):
-        course_name = courses_id_name_dict[assignment['course_id']]
-        assignment_name = assignment['name']
+        course_name = course_ids[str(assignment['course_id'])]
         project_id = todoist_project_dict[course_name]
 
         is_added = False
@@ -188,7 +179,7 @@ def transfer_assignments_to_todoist():
                 print(f"{i + 1}. Assignment already synced: \"{assignment['name']}\"")
                 is_added = True
                 # print(assignment)
-                if (task['due'] and task['due']['date'] != assignment['due_at']):
+                if task['due'] and task['due']['date'] != assignment['due_at']:
                     is_synced = False
                     item = task
                     print(
@@ -197,7 +188,7 @@ def transfer_assignments_to_todoist():
             # print(assignment)
 
         if not is_added:
-            if assignment['submission']['submitted_at'] == None:
+            if assignment['submission']['submitted_at'] is None:
                 print(f"{i + 1}. Adding assignment: \"{assignment['name']}\", due: {assignment['due_at']}")
                 add_new_task(assignment, project_id)
             else:
