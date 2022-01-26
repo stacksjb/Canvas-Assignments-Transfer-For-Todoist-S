@@ -1,3 +1,17 @@
+"""
+Modifications by Andrei Cozma which are based on the original code from the following repository:
+https://github.com/scottquach/Canvas-Assignments-Transfer-For-Todoist
+
+What's new:
+- Use the 'canvasapi' library instead of requests for shorter/cleaner code
+- Use the 'pick' library for better multiple-item selection
+- Added ability to rename a course as it appears as a Todoist project (can optionally use the default name from Canvas)
+- Added summary after assignment transfer. Shows counts of new assignments, updated assignments, and skipped assignments (already submitted or already up to date)
+- Reformatted print statements for better verbosity and readability.
+
+Huge thanks to scottquach and stacksjb for their awesome work on this project.
+"""
+
 import json
 from operator import itemgetter
 
@@ -20,8 +34,8 @@ input_prompt = "> "
 
 
 def main():
-    print("  ###################################################")
-    print(" #     Canvas-Assignments-Transfer-For-Todoist     #")
+    print("###################################################")
+    print("#     Canvas-Assignments-Transfer-For-Todoist     #")
     print("###################################################\n")
     initialize_api()
     select_courses()
@@ -162,6 +176,7 @@ def create_todoist_projects():
             print(f" - INFO: \"{course_name}\" already exists; skipping...")
     print()
 
+
 def check_existing_task(assignment, project_id):
     is_added = False
     is_synced = True
@@ -176,6 +191,8 @@ def check_existing_task(assignment, project_id):
                 item = task
                 break
     return is_added, is_synced, item
+
+
 # Transfers over assignments from canvas over to Todoist, the method Checks
 # to make sure the assignment has not already been trasnfered to prevent overlap
 def transfer_assignments_to_todoist():
