@@ -142,7 +142,6 @@ def load_todoist_projects():
     projects = todoist_api.state['projects']
     for project in projects:
         todoist_project_dict[project['name']] = project['id']
-    # print(todoist_project_dict)
 
 
 # Checks to see if the user has a project matching their course names, if there
@@ -163,43 +162,54 @@ def create_todoist_projects():
             print(f" - INFO: \"{course_name}\" already exists; skipping...")
     print()
 
+def check_existing_task(assignment, project_id):
+    is_added = False
+    is_synced = True
+    item = None
+    for task in todoist_tasks:
+        if task['content'] == ('[' + assignment['name'] + '](' + assignment['html_url'] + ')' + ' Due') and \
+                task['project_id'] == project_id:
 
+            is_added = True
+            if task['due'] and task['due']['date'] != assignment['due_at']:
+                is_synced = False
+                item = task
+                break
+    return is_added, is_synced, item
 # Transfers over assignments from canvas over to Todoist, the method Checks
 # to make sure the assignment has not already been trasnfered to prevent overlap
 def transfer_assignments_to_todoist():
     print("# Transferring assignments to Todoist")
+
+    counts = {'added': 0, 'updated': 0, 'is-submitted': 0, 'up-to-date': 0}
     for i, assignment in enumerate(assignments):
+        assignment_name = assignment['name']
         course_name = course_ids[str(assignment['course_id'])]
         project_id = todoist_project_dict[course_name]
 
-        is_added = False
-        is_synced = True
-        item = None
-        for task in todoist_tasks:
-            if task['content'] == ('[' + assignment['name'] + '](' + assignment['html_url'] + ')' + ' Due') and \
-                    task['project_id'] == project_id:
-                print(f"{i + 1}. Assignment already synced: \"{assignment['name']}\"")
-                is_added = True
-                # print(assignment)
-                if task['due'] and task['due']['date'] != assignment['due_at']:
-                    is_synced = False
-                    item = task
-                    print(
-                        f"  - Updating assignment due date: \"{assignment['name']}\" from [{task['due'].get('date')}] to [{assignment['due_at']}]")
-                    break
-            # print(assignment)
-
+        is_added, is_synced, item = check_existing_task(assignment, project_id)
+        print(f" {i}) Assignment: \"{assignment_name}\"")
         if not is_added:
             if assignment['submission']['submitted_at'] is None:
-                print(f"{i + 1}. Adding assignment: \"{assignment['name']}\", due: {assignment['due_at']}")
+                print(f"     - NEW: Adding new Task for assignment")
                 add_new_task(assignment, project_id)
+                counts['added'] += 1
             else:
-                print(f"{i + 1}. Assignment already exists: \"{assignment['name']}\", due: {assignment['due_at']}")
+                print(f"     - INFO: Already submitted, skipping...")
+                counts['is-submitted'] += 1
         elif not is_synced:
-            print(f"{i + 1}. Updating assignment: \"{assignment['name']}\", due: {assignment['due_at']}")
+            print(f"     - UPDATE: Updating Task for assignment")
             update_task(assignment, item)
+            counts['updated'] += 1
+        else:
+            print(f"     - OK: Task is already up to date!")
+            counts['up-to-date'] += 1
 
-        #     print("assignment already synced")
+    print(f"\n# Summary:")
+    print(f" - Added: {counts['added']}")
+    print(f" - Updated: {counts['updated']}")
+    print(f" - Already Submitted: {counts['is-submitted']}")
+    print(f" - Up to Date: {counts['up-to-date']}")
     todoist_api.commit()
 
 
