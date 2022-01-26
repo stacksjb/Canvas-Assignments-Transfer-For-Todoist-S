@@ -67,7 +67,7 @@ def select_courses():
     if config['courses']:
         use_previous_input = input(" - You have previously selected courses. Would you like to use the courses selected last time? (y/n) ")
         print("")
-        if use_previous_input == "y" or use_previous_input == "Y":
+        if use_previous_input.lower() == "y":
             for course_id in config['courses']:
                 # print(course_id)
                 course_ids.append(int(course_id))
