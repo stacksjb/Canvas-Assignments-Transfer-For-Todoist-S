@@ -9,10 +9,14 @@ What's new:
 - Added summary after assignment transfer. Shows counts of new assignments, updated assignments, and skipped assignments (already submitted or already up to date)
 - Reformatted print statements for better verbosity and readability.
 
+TODO:
+- Add task priority based on key words (configurable)
+
 Huge thanks to scottquach and stacksjb for their awesome work on this project.
 """
 
 import json
+from datetime import datetime
 from operator import itemgetter
 
 import requests
@@ -30,6 +34,12 @@ todoist_tasks = []
 courses_id_name_dict = {}
 todoist_project_dict = {}
 
+priorities = {
+    1: "Normal",
+    2: "Medium",
+    3: "High",
+    4: "Urgent"
+}
 input_prompt = "> "
 
 
@@ -177,16 +187,48 @@ def create_todoist_projects():
     print()
 
 
-def check_existing_task(assignment, project_id):
+def make_task_title(assignment):
+    return '[' + assignment['name'] + '](' + assignment['html_url'] + ')'
+
+
+def get_priority(assignment):
+    # Task priority from 1 (normal, default value) to 4 (urgent).
+    # 1: Normal, 2: Medium, 3: High, 4: Urgent
+    assignment_name = assignment['name']
+    assignment_due_at = assignment['due_at']
+    priority = 1
+
+    keywords = {
+        4: ['exam', 'test', 'midterm', 'final'],
+        3: ['project', 'paper', 'quiz', 'homework', 'discussion'],
+        2: ['reading', 'assignment']
+    }
+
+    for p, keywords in keywords.items():
+        if p > priority and any(keyword in assignment_name.lower() for keyword in keywords):
+            priority = p
+
+    if assignment_due_at is not None:
+        due_at = datetime.strptime(assignment_due_at, '%Y-%m-%dT%H:%M:%SZ')
+
+        # If there are less than 3 days left on the assignment, set priority to 4
+        if (due_at - datetime.now()).days < 3:
+            priority = 4
+
+    return priority
+
+
+def check_existing_task(assignment, project_id, priority):
     is_added = False
     is_synced = True
     item = None
     for task in todoist_tasks:
-        if task['content'] == ('[' + assignment['name'] + '](' + assignment['html_url'] + ')' + ' Due') and \
-                task['project_id'] == project_id:
-
+        task_title = make_task_title(assignment)
+        if task['content'] == task_title and task['project_id'] == project_id:
             is_added = True
-            if task['due'] and task['due']['date'] != assignment['due_at']:
+            # Check if task is synced by comparing due dates and priority
+            if (task['due'] and task['due']['date'] != assignment['due_at']) or \
+                    task['priority'] != priority:
                 is_synced = False
                 item = task
                 break
@@ -204,23 +246,26 @@ def transfer_assignments_to_todoist():
         course_name = course_ids[str(assignment['course_id'])]
         project_id = todoist_project_dict[course_name]
 
-        is_added, is_synced, item = check_existing_task(assignment, project_id)
+        priority = get_priority(assignment)
+        due_at = assignment['due_at']
+        is_added, is_synced, item = check_existing_task(assignment, project_id, priority)
         print(f" {i}) Assignment: \"{assignment_name}\"")
         if not is_added:
             if assignment['submission']['submitted_at'] is None:
-                print(f"     - NEW: Adding new Task for assignment")
-                add_new_task(assignment, project_id)
+                add_new_task(assignment, project_id, priority)
                 counts['added'] += 1
             else:
                 print(f"     - INFO: Already submitted, skipping...")
                 counts['is-submitted'] += 1
         elif not is_synced:
-            print(f"     - UPDATE: Updating Task for assignment")
-            update_task(assignment, item)
+            update_task(assignment, item, priority)
             counts['updated'] += 1
         else:
             print(f"     - OK: Task is already up to date!")
             counts['up-to-date'] += 1
+
+        print(f"     - Priority: {priority}")
+        print(f"     - Due Date: {due_at}")
 
     print(f"\n# Summary:")
     print(f" - Added: {counts['added']}")
@@ -230,19 +275,35 @@ def transfer_assignments_to_todoist():
     todoist_api.commit()
 
 
-# Adds a new task from a Canvas assignment object to Todoist under the
-# project coreesponding to project_id
-def add_new_task(assignment, project_id):
-    # print(assignment);
-    todoist_api.add_item('[' + assignment['name'] + '](' + assignment['html_url'] + ')' + ' Due',
+# Adds a new task from a Canvas assignment object to Todoist under the project corresponding to project_id
+def add_new_task(assignment, project_id, priority):
+    print(f"     - NEW: Adding new Task for assignment")
+    task_title = make_task_title(assignment)
+    due_at = assignment['due_at']
+    todoist_api.add_item(task_title,
                          project_id=project_id,
-                         date_string=assignment['due_at'])
+                         date_string=due_at,
+                         priority=priority)
 
 
-def update_task(assignment, item):
+def update_task(assignment, item, priority):
+    print(f"     - UPDATE: Updating Task for assignment: ", end='')
+    updates = []
+    canvas_due = assignment['due_at']
+    todoist_due = item['due']['date'] if item['due'] else None
+    if todoist_due != canvas_due:
+        updates.append('due date')
+
+    todoist_priority = item['priority']
+    if todoist_priority != priority:
+        updates.append('priority')
+
+    print(", ".join(updates))
+
     item.update(due={
-        'date': assignment['due_at']
-    })
+        'date': canvas_due,
+    },
+        priority=priority)
 
 
 if __name__ == "__main__":
