@@ -130,7 +130,7 @@ def select_courses():
     print("# If you would like to rename a course as it appears on Todoist, enter the new name below.")
     print("# To use the course name as it appears on Canvas, leave the field blank.")
     for i, (course_name, index) in enumerate(selected):
-        course_id = sorted_ids[index]
+        course_id = str(sorted_ids[index])
         course_name_prev = course_name
         print(f" {i + 1}) {course_name_prev}")
         course_name_new = input("    - Project Name: ")
