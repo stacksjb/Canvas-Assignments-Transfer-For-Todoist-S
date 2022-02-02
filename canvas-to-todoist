@@ -73,6 +73,12 @@ def main():
     transfer_assignments_to_todoist()
     logging.info("# Finished!")
 
+def save_config():
+    """
+    Saves the configuration file to disk.
+    """
+    with open(config_fn, 'w') as f:
+        json.dump(config, f, indent=4)
 
 def initialize_api():
     """
@@ -81,24 +87,30 @@ def initialize_api():
     global config
     global todoist_api
 
-    with open(config_fn) as config_file:
-        config = json.load(config_file);
-    if len(config['todoist_api_key']) == 0:
+    # Load config file
+    try:
+        with open(config_fn) as config_file:
+            config = json.load(config_file)
+    except FileNotFoundError:
+        logging.warning("Config file not found. Creating config file...")
+
+    if 'canvas_api_heading' not in config:
+        config['canvas_api_heading'] = "https://canvas.instructure.com"
+
+    if 'todoist_api_key' not in config or len(config['todoist_api_key']) == 0:
         logging.info("Your Todoist API key has not been configured!\n"
               "To add an API token, go to your Todoist settings and "
               "copy the API token listed under the Integrations Tab.\n"
               "Copy the token and paste below when you are done.")
         config['todoist_api_key'] = input(input_prompt)
-        with open(config_fn, "w") as outfile:
-            json.dump(config, outfile)
-    if (len(config['canvas_api_key'])) == 0:
+        save_config()
+    if 'canvas_api_key' not in config or len(config['canvas_api_key']) == 0:
         logging.info("Your Canvas API key has not been configured!\n"
               "To add an API token, go to your Canvas settings and"
               "click on New Access Token under Approved Integrations.\n"
               "Copy the token and paste below when you are done.")
         config['canvas_api_key'] = input(input_prompt)
-        with open(config_fn, "w") as outfile:
-            json.dump(config, outfile)
+        save_config()
 
     # create todoist_api object globally
     todoist_api = TodoistAPI(config['todoist_api_key'].strip())
@@ -128,7 +140,7 @@ def select_courses():
 
     logging.info(f"=> Found {len(courses_id_name_dict)} courses")
 
-    if config['courses']:
+    if 'courses' in config and config['courses']:
         logging.info("")
         logging.info("# You have previously selected courses:")
         for i, (c_id, c_name) in enumerate(config['courses'].items()):
@@ -161,8 +173,7 @@ def select_courses():
 
     # write course ids to config file
     config['courses'] = course_ids
-    with open(config_fn, "w") as outfile:
-        json.dump(config, outfile)
+    save_config()
 
 
 def load_assignments():
@@ -170,6 +181,7 @@ def load_assignments():
     Iterates over the course_ids list and loads all the users assignments for those classes.
     Appends assignment objects to assignments list.
     """
+
     for course_id in course_ids:
         response = requests.get(config['canvas_api_heading'] + '/api/v1/courses/' +
                                 str(course_id) + '/assignments', headers=header,
