@@ -87,6 +87,8 @@ def initialize_api():
     global config
     global todoist_api
 
+    datetime_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    logging.info(f"# Reading configuration... {datetime_str}")
     # Load config file
     try:
         with open(config_fn) as config_file:
@@ -117,7 +119,6 @@ def initialize_api():
     todoist_api.reset_state()
     todoist_api.sync()
     header.update({"Authorization": "Bearer " + config['canvas_api_key'].strip()})
-    logging.info("# API INITIALIZED")
 
 
 def select_courses():
