@@ -18,28 +18,41 @@ Huge thanks to scottquach and stacksjb for their awesome work on this project.
 
 import json
 import logging
+import os
+import sys
 from datetime import datetime
 from operator import itemgetter
-
+from notifypy import Notify
+from appdirs import *
 import requests
 from canvasapi import Canvas
 from pick import pick
 from todoist.api import TodoistAPI
 
+
+appname = "CanvasToTodoist"
+appauthor = "GitHub Community"
+os_config_path = user_config_dir(appname, appauthor)
+os.makedirs(os_config_path, exist_ok=True)
+os_log_path = user_log_dir(appname, appauthor)
+os.makedirs(os_log_path, exist_ok=True)
+
 # Set up logging
-logfilename = "logs"
-handlers = [logging.FileHandler(f"{logfilename}.log", mode='w'),
-            logging.StreamHandler()]
+log_fn = "canvas-to-todoist.log"
+log_path = os.path.join(os_log_path, log_fn)
+log_handlers = [logging.FileHandler(log_path, mode='w'),
+                logging.StreamHandler()]
 # handlers = [logging.FileHandler(f"{logfilename}.log", mode='w')]
 logging.basicConfig(
     level=logging.INFO,
     format="%(message)s",
     # format="%(asctime)s %(levelname)6s : %(message)s [%(funcName)s():%(lineno)s]",
-    handlers=handlers
+    handlers=log_handlers
 )
 
 # Loaded configuration files
 config_fn = "config.json"
+config_path = os.path.join(os_config_path, config_fn)
 config = {}
 header = {}
 param = {'per_page': '100', 'include': 'submission'}
@@ -62,7 +75,10 @@ skip_confirmation_prompts = args.yes
 def main():
     logging.info("###################################################")
     logging.info("#     Canvas-Assignments-Transfer-For-Todoist     #")
-    logging.info("###################################################\n")
+    logging.info("###################################################")
+    logging.info(f"Logs saved to: {log_path}")
+    logging.info("")
+
     initialize_api()
     select_courses()
 
@@ -77,7 +93,7 @@ def save_config():
     """
     Saves the configuration file to disk.
     """
-    with open(config_fn, 'w') as f:
+    with open(config_path, 'w') as f:
         json.dump(config, f, indent=4)
 
 def initialize_api():
@@ -89,9 +105,11 @@ def initialize_api():
 
     datetime_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     logging.info(f"# Reading configuration... {datetime_str}")
+    logging.info(f"  - Config Path: {config_path}")
+
     # Load config file
     try:
-        with open(config_fn) as config_file:
+        with open(config_path) as config_file:
             config = json.load(config_file)
     except FileNotFoundError:
         logging.warning("Config file not found. Creating config file...")
@@ -104,6 +122,9 @@ def initialize_api():
               "To add an API token, go to your Todoist settings and "
               "copy the API token listed under the Integrations Tab.\n"
               "Copy the token and paste below when you are done.")
+        if skip_confirmation_prompts:
+            logging.error("You must configure your Todoist API key. Please run without -y argument to configure.")
+            sys.exit(1)
         config['todoist_api_key'] = input(input_prompt)
         save_config()
     if 'canvas_api_key' not in config or len(config['canvas_api_key']) == 0:
@@ -111,6 +132,9 @@ def initialize_api():
               "To add an API token, go to your Canvas settings and"
               "click on New Access Token under Approved Integrations.\n"
               "Copy the token and paste below when you are done.")
+        if skip_confirmation_prompts:
+            logging.error("You must configure your Canvas API key. Please run without -y argument to configure.")
+            sys.exit(1)
         config['canvas_api_key'] = input(input_prompt)
         save_config()
 
@@ -358,6 +382,12 @@ def transfer_assignments_to_todoist():
     logging.info(f"  * Already Submitted: {len(summary['is-submitted'])}")
     logging.info(f"  * Up to Date: {len(summary['up-to-date'])}")
 
+    notification = Notify()
+    notification.title = f"Canvas to Todoist (Total: {len(assignments)})"
+    notification.message = f"Added {len(summary['added'])} & Updated {len(summary['updated'])}.\n" \
+                           f"Completed: {len(summary['is-submitted'])} & Up-to-Date {len(summary['up-to-date'])}."
+    notification.send()
+
     # Print detailed summary?
     logging.info("")
     if not skip_confirmation_prompts:
@@ -405,7 +435,7 @@ def update_task(c_a, t_task):
     """
     Updates an existing task from a Canvas assignment object to Todoist
     """
-    logging.info(f"     UPDATE: Updating Task for assignment: ", end='')
+    logging.info(f"     UPDATE: Updating Task for assignment: ")
     updates_list = []
     # Check if due date has changed
     t_d = t_task['due']['date'] if t_task['due'] else None
