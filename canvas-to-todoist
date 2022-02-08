@@ -16,6 +16,7 @@ What's new:
 Huge thanks to scottquach and stacksjb for their awesome work on this project.
 """
 
+import argparse
 import json
 import logging
 import os
@@ -65,12 +66,14 @@ todoist_project_dict = {}
 input_prompt = "> "
 
 # Parse arguments and extract boolean flag -y which defaults to false
-import argparse
-parser = argparse.ArgumentParser(description='Transfer Canvas assignments to Todoist')
-parser.add_argument('-y', '--yes', action='store_true', help='Skip confirmation prompts')
+parser = argparse.ArgumentParser(
+    description='Transfer Canvas assignments to Todoist')
+parser.add_argument('-y', '--yes', action='store_true',
+                    help='Skip confirmation prompts')
 # Get value of -y flag
 args = parser.parse_args()
 skip_confirmation_prompts = args.yes
+
 
 def main():
     logging.info("###################################################")
@@ -89,12 +92,14 @@ def main():
     transfer_assignments_to_todoist()
     logging.info("# Finished!")
 
+
 def save_config():
     """
     Saves the configuration file to disk.
     """
     with open(config_path, 'w') as f:
         json.dump(config, f, indent=4)
+
 
 def initialize_api():
     """
@@ -119,21 +124,23 @@ def initialize_api():
 
     if 'todoist_api_key' not in config or len(config['todoist_api_key']) == 0:
         logging.info("Your Todoist API key has not been configured!\n"
-              "To add an API token, go to your Todoist settings and "
-              "copy the API token listed under the Integrations Tab.\n"
-              "Copy the token and paste below when you are done.")
+                     "To add an API token, go to your Todoist settings and "
+                     "copy the API token listed under the Integrations Tab.\n"
+                     "Copy the token and paste below when you are done.")
         if skip_confirmation_prompts:
-            logging.error("You must configure your Todoist API key. Please run without -y argument to configure.")
+            logging.error(
+                "You must configure your Todoist API key. Please run without -y argument to configure.")
             sys.exit(1)
         config['todoist_api_key'] = input(input_prompt)
         save_config()
     if 'canvas_api_key' not in config or len(config['canvas_api_key']) == 0:
         logging.info("Your Canvas API key has not been configured!\n"
-              "To add an API token, go to your Canvas settings and"
-              "click on New Access Token under Approved Integrations.\n"
-              "Copy the token and paste below when you are done.")
+                     "To add an API token, go to your Canvas settings and"
+                     "click on New Access Token under Approved Integrations.\n"
+                     "Copy the token and paste below when you are done.")
         if skip_confirmation_prompts:
-            logging.error("You must configure your Canvas API key. Please run without -y argument to configure.")
+            logging.error(
+                "You must configure your Canvas API key. Please run without -y argument to configure.")
             sys.exit(1)
         config['canvas_api_key'] = input(input_prompt)
         save_config()
@@ -142,7 +149,8 @@ def initialize_api():
     todoist_api = TodoistAPI(config['todoist_api_key'].strip())
     todoist_api.reset_state()
     todoist_api.sync()
-    header.update({"Authorization": "Bearer " + config['canvas_api_key'].strip()})
+    header.update({"Authorization": "Bearer " +
+                  config['canvas_api_key'].strip()})
 
 
 def select_courses():
@@ -171,7 +179,8 @@ def select_courses():
         for i, (c_id, c_name) in enumerate(config['courses'].items()):
             logging.info(f'  {i + 1}. {c_name} [ID: {c_id}]')
         if not skip_confirmation_prompts:
-            use_previous_input = input("Q: Would you like to use the courses selected last time? (Y/n) ")
+            use_previous_input = input(
+                "Q: Would you like to use the courses selected last time? (Y/n) ")
         else:
             use_previous_input = "y"
         logging.info("")
@@ -182,13 +191,17 @@ def select_courses():
 
     title = "Select the course(s) you would like to add to Todoist (press SPACE to mark, ENTER to continue):"
 
-    sorted_ids, sorted_courses = zip(*sorted(courses_id_name_dict.items(), key=itemgetter(0)))
+    sorted_ids, sorted_courses = zip(
+        *sorted(courses_id_name_dict.items(), key=itemgetter(0)))
 
-    selected = pick(sorted_courses, title, multiselect=True, min_selection_count=1)
+    selected = pick(sorted_courses, title,
+                    multiselect=True, min_selection_count=1)
 
     logging.info("# SELECTED COURSES:")
-    logging.info("# If you would like to rename a course as it appears on Todoist, enter the new name below.")
-    logging.info("# To use the course name as it appears on Canvas, leave the field blank.")
+    logging.info(
+        "# If you would like to rename a course as it appears on Todoist, enter the new name below.")
+    logging.info(
+        "# To use the course name as it appears on Canvas, leave the field blank.")
     for i, (course_name, index) in enumerate(selected):
         course_id = str(sorted_ids[index])
         course_name_prev = course_name
@@ -254,7 +267,8 @@ def create_todoist_projects():
             todoist_project_dict[project['name']] = project['id']
             logging.info(f" - OK: Created Project: \"{course_name}\"")
         else:
-            logging.info(f"  {i + 1}. INFO: \"{course_name}\" already exists; skipping...")
+            logging.info(
+                f"  {i + 1}. INFO: \"{course_name}\" already exists; skipping...")
     logging.info("")
 
 
@@ -337,7 +351,8 @@ def transfer_assignments_to_todoist():
     """
     logging.info("# Transferring assignments to Todoist...")
 
-    summary = {'added': [], 'updated': [], 'is-submitted': [], 'up-to-date': []}
+    summary = {'added': [], 'updated': [],
+               'is-submitted': [], 'up-to-date': []}
     for i, c_a in enumerate(assignments):
         # Get the canvas assignment name, due date, course name, todoist project id
         c_n = c_a['name']
@@ -382,11 +397,15 @@ def transfer_assignments_to_todoist():
     logging.info(f"  * Already Submitted: {len(summary['is-submitted'])}")
     logging.info(f"  * Up to Date: {len(summary['up-to-date'])}")
 
-    notification = Notify()
-    notification.title = f"Canvas to Todoist (Total: {len(assignments)})"
-    notification.message = f"Added {len(summary['added'])} & Updated {len(summary['updated'])}.\n" \
-                           f"Completed: {len(summary['is-submitted'])} & Up-to-Date {len(summary['up-to-date'])}."
-    notification.send()
+    if len(summary['added']) > 0 or len(summary['updated']) > 0:
+        logging.info("New tasks added or updated. Sending notification.")
+        notification = Notify()
+        notification.title = f"Canvas to Todoist (Total: {len(assignments)})"
+        notification.message = f"Added {len(summary['added'])} & Updated {len(summary['updated'])}.\n" \
+            f"Completed: {len(summary['is-submitted'])} & Up-to-Date {len(summary['up-to-date'])}."
+        notification.send()
+    else:
+        logging.info("No new tasks added or updated. Skipping notification.")
 
     # Print detailed summary?
     logging.info("")
@@ -410,7 +429,8 @@ def transfer_assignments_to_todoist():
                 if a_d:
                     d = datetime.strptime(a_d, '%Y-%m-%dT%H:%M:%SZ')
                 # Convert to format: May 22, 2022 at 12:00 PM
-                d_nat = "Unknown" if d is None else d.strftime('%b %d, %Y at %I:%M %p')
+                d_nat = "Unknown" if d is None else d.strftime(
+                    '%b %d, %Y at %I:%M %p')
                 logging.info(f"    {i + 1}. \"{c_n}\"")
                 logging.info(f"         Course: {c_cn}")
                 logging.info(f"         Due Date: {d_nat}")
