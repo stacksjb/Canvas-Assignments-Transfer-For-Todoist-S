@@ -325,7 +325,7 @@ def download_file_handler(file_obj, folder_path, subfolder_name=None):
         return download_file_handler(file_obj, os.path.join(folder_path, subfolder_name))
     
     logging.info(f"    - Downloading `{file_name}` (size: {file_size} bytes, {file_size_mb} MB)")
-    if os.path.isfile(file_path)
+    if os.path.isfile(file_path):
         # Get size in bytes of filepath
         existing_size = os.path.getsize(file_path)
         if existing_size == file_size:
