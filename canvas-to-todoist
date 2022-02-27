@@ -10,6 +10,7 @@ What's new:
 - Automatically set task priority based on keywords (configurable)
 - Print short and detailed summaries after assignment transfer.
   - Shows counts of new assignments, updated assignments, and skipped assignments (already submitted or already up to date)
+- Optional file downloading capability
 - Reformatted print statements for better verbosity and readability.
 
 
@@ -363,7 +364,7 @@ def download_files():
         for folder in response.json():
             folder_name = folder['full_name']
             # Replace +, _, -, and spaces with -
-            folder_name = re.sub(r'[\s+_\-]+:', '-', folder_name)
+            folder_name = re.sub(r'[\s+_\-:]+', '-', folder_name)
 
             folder_path = os.path.join(c_obj['save_path'], folder_name.lower())
             os.makedirs(folder_path, exist_ok=True)
