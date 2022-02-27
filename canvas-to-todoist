@@ -319,10 +319,13 @@ def download_file_handler(file_obj, folder_path, subfolder_name=None):
     file_url = file_obj['url']
     file_size = file_obj['size']
     file_size_mb = round(file_size / 1000000, 2)
-    logging.info(f"    - Downloading `{file_name}` (size: {file_size} bytes, {file_size_mb} MB)")
 
     # Download the file to folder
-    if os.path.isfile(file_path):
+    if not os.path.isfile(file_path) and subfolder_name is not None:
+        return download_file_handler(file_obj, os.path.join(folder_path, subfolder_name))
+    
+    logging.info(f"    - Downloading `{file_name}` (size: {file_size} bytes, {file_size_mb} MB)")
+    if os.path.isfile(file_path)
         # Get size in bytes of filepath
         existing_size = os.path.getsize(file_path)
         if existing_size == file_size:
@@ -330,8 +333,6 @@ def download_file_handler(file_obj, folder_path, subfolder_name=None):
             return False
 
         logging.info(f"      - File needs updating: Current Size = {existing_size} => New Size = {file_size}")
-    elif subfolder_name is not None:
-        return download_file_handler(file_obj, os.path.join(folder_path, subfolder_name))
 
     if file_url == '':
         logging.info(f"      - No URL found for file. Skipping...")
