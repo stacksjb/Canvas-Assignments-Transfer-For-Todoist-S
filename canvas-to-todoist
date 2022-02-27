@@ -192,7 +192,11 @@ def select_courses():
         logging.info("")
         logging.info("# You have previously selected courses:")
         for i, (c_id, c_obj) in enumerate(config['courses'].items()):
-            c_name = c_obj['name']
+            try:
+                c_name = c_obj['name']
+            except TypeError:
+                c_name = c_obj
+                config['courses'][c_id] = {'name': c_name}
             logging.info(f'  {i + 1}. {c_name} [ID: {c_id}]')
         if not skip_confirmation_prompts:
             use_previous_input = input(
