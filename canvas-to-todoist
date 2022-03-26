@@ -25,10 +25,10 @@ from datetime import datetime
 
 import appdirs
 
-from lib.CanvasHelper import CanvasHelper
-from lib.ConfigHelper import ConfigHelper
-from lib.NotificationHelper import NotificationHelper
-from lib.TodoistHelper import TodoistHelper
+from helpers.CanvasHelper import CanvasHelper
+from helpers.ConfigHelper import ConfigHelper
+from helpers.NotificationHelper import NotificationHelper
+from helpers.TodoistHelper import TodoistHelper
 
 appname = "CanvasToTodoist"
 appauthor = "GitHub Community"
