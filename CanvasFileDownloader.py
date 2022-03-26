@@ -4,6 +4,7 @@ import sys
 
 from helpers.CanvasHelper import CanvasHelper
 from helpers.ConfigHelper import ConfigHelper
+from helpers.NotificationHelper import NotificationHelper
 
 
 class CanvasFileDownloader:
@@ -32,8 +33,14 @@ class CanvasFileDownloader:
 
         if use_previous_input.lower() == "y":
             self.load_save_paths()
-            self.canvas_helper.download_course_files_all(self.selected_course_ids, self.param)
-            self.canvas_helper.download_module_files_all(self.selected_course_ids, self.param)
+            num_courses, num_files_total = self.canvas_helper.download_course_files_all(self.selected_course_ids,
+                                                                                        self.param)
+            NotificationHelper.send_notification("Canvas Files",
+                                                 f"Downloaded {num_files_total} files for {num_courses} courses")
+            num_courses, num_files_total = self.canvas_helper.download_module_files_all(self.selected_course_ids,
+                                                                                        self.param)
+            NotificationHelper.send_notification("Canvas Module Files",
+                                                 f"Downloaded {num_files_total} files for {num_courses} course modules.")
 
     def load_save_paths(self):
         has_missing = False

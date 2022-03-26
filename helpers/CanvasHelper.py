@@ -49,25 +49,37 @@ class CanvasHelper:
 
     def download_course_files_all(self, course_ids, param):
         logging.info("# Downloading Folders & Files")
+        num_courses = 0
+        num_files_total = 0
         for course_id, c_obj in course_ids.items():
             c_name = c_obj['name']
             logging.info(f"# Course: {c_name}")
             save_path = c_obj['save_path']
-            if not self.download_helper.download_course_files(course_id, save_path, param):
+            num_files = self.download_helper.download_course_files(course_id, save_path, param)
+            if not num_files:
                 continue
+            num_courses += 1
+            num_files_total += num_files
 
         logging.info("")
+        return num_courses, num_files_total
 
     def download_module_files_all(self, course_ids, param):
         logging.info("# Downloading Any Additional Files in Modules")
+        num_courses = 0
+        num_files_total = 0
         for course_id, c_obj in course_ids.items():
             c_name = c_obj['name']
             logging.info(f"# Course: {c_name}")
             save_path = c_obj['save_path']
-            if not self.download_helper.download_module_files(course_id, save_path, param):
+            num_files = self.download_helper.download_module_files(course_id, save_path, param)
+            if not num_files:
                 continue
+            num_courses += 1
+            num_files_total += num_files
 
         logging.info("")
+        return num_courses, num_files_total
 
     def select_courses(self, config_helper, rename_list=None, skip_confirmation_prompts=False):
         """
@@ -161,6 +173,7 @@ class CanvasDownloadHelper():
         if response.status_code != 200:
             return False
 
+        num_files = 0
         for folder in response.json():
             folder_name = folder['full_name']
             # Replace +, _, -, and spaces with -
@@ -186,9 +199,10 @@ class CanvasDownloadHelper():
             logging.info(f" * Folder `{folder_name}` (Folders: {folders_count}, Files: {files_count})")
 
             for file in folder_files_response.json():
-                self.download_file_handler(file, folder_path)
+                if self.download_file_handler(file, folder_path):
+                    num_files += 1
 
-        return True
+        return num_files
 
     def download_module_files(self, course_id, save_path, param=None):
         if param is None:
@@ -199,6 +213,7 @@ class CanvasDownloadHelper():
         if response.status_code != 200:
             return False
 
+        num_files = 0
         for module in response.json():
             module_name = module['name']
             # Replace +, _, -, and spaces with -
@@ -216,11 +231,12 @@ class CanvasDownloadHelper():
                 html_url = item['url']
                 html_url_response = requests.get(html_url, headers=self.header)
                 html_url_response_json = html_url_response.json()
-                self.download_file_handler(html_url_response_json,
-                                           os.path.join(save_path, "course-files"),
-                                           module_name.lower())
+                if self.download_file_handler(html_url_response_json,
+                                              os.path.join(save_path, "course-files"),
+                                              module_name.lower()):
+                    num_files += 1
 
-        return True
+        return num_files
 
     def download_file_handler(self, file_obj, folder_path, subfolder_name=None):
         os.makedirs(folder_path, exist_ok=True)
