@@ -189,10 +189,10 @@ class CanvasDownloadHelper():
             with open(os.path.join(folder_path, f'{reason_clean}.json'), 'w') as f:
                 json.dump(folder_files_response.json(), f, indent=4)
 
-            if folder_files_response.status_code == 401:
+            if folder_files_response.status_code != 200:
                 logging.info(f"  * Folder: `{folder_name}` => "
                              f"{folder_files_response.status_code} - {folder_files_response.reason}")
-                return False
+                continue
 
             folders_count = folder['folders_count']
             files_count = folder['files_count']
@@ -226,7 +226,7 @@ class CanvasDownloadHelper():
             for item in items_url_response.json():
                 file_type = item['type']
                 if file_type != "File":
-                    return False
+                    continue
 
                 html_url = item['url']
                 html_url_response = requests.get(html_url, headers=self.header)
