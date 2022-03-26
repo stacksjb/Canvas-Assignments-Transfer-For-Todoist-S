@@ -29,9 +29,9 @@ import appdirs
 from canvasapi import Canvas
 from pick import pick
 
-from CanvasHelper import CanvasHelper
-from NotificationHelper import NotificationHelper
-from TodoistHelper import TodoistHelper
+from lib.CanvasHelper import CanvasHelper
+from lib.NotificationHelper import NotificationHelper
+from lib.TodoistHelper import TodoistHelper
 
 appname = "CanvasToTodoist"
 appauthor = "GitHub Community"
@@ -71,6 +71,7 @@ class CanvasToTodoist:
         self.courses_id_name_dict = {}
         self.input_prompt = "> "
 
+        self.canvas_helper = CanvasHelper(self.config['canvas_api_key'])
         self.todoist_helper = TodoistHelper(self.config['todoist_api_key'])
 
     def run(self):
@@ -82,13 +83,12 @@ class CanvasToTodoist:
         else:
             use_previous_input = "y"
 
-        canvas_helper = CanvasHelper(self.config['canvas_api_key'])
         # if use_previous_input.lower() == "y":
         #     self.load_save_paths()
         #     canvas_helper.download_course_files_all(self.course_ids, self.param)
         #     canvas_helper.download_module_files_all(self.course_ids, self.param)
 
-        assignments = canvas_helper.load_assignments(self.course_ids, self.param)
+        assignments = self.canvas_helper.load_assignments(self.course_ids, self.param)
 
         course_names = self.get_course_names(self.course_ids)
 
