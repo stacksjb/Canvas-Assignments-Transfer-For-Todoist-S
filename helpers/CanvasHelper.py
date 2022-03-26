@@ -1,0 +1,266 @@
+import json
+import logging
+import os
+import re
+
+import requests
+from canvasapi import Canvas
+
+
+class CanvasHelper:
+
+    def __init__(self, api_key, canvas_api_heading="https://canvas.instructure.com"):
+        self.api_key = api_key
+        self.canvas_api_heading = canvas_api_heading
+        self.header = {"Authorization": f"Bearer {api_key.strip()}"}
+        self.download_helper = CanvasDownloadHelper(api_key)
+        self.course_ids = {}
+        self.courses_id_name_dict = {}
+
+    @staticmethod
+    def get_course_names(course_ids):
+        logging.info("# Getting Course Names...")
+
+        course_names = []
+        for course_obj in course_ids.values():
+            course_names.append(course_obj['name'])
+        logging.info("")
+        return course_names
+
+    def get_assignments(self, course_ids, param):
+        """
+        Iterates over the course_ids list and loads all the users assignments for those classes.
+        Appends assignment objects to assignments list.
+        """
+        logging.info("# Loading assignments from Canvas")
+        assignments = []
+        for course_id in course_ids:
+            response = requests.get(self.canvas_api_heading + '/api/v1/courses/' +
+                                    str(course_id) + '/assignments', headers=self.header,
+                                    params=param)
+            if response.status_code == 401:
+                logging.info('Unauthorized! Check Canvas API Key')
+                exit()
+            for assignment in response.json():
+                assignments.append(assignment)
+
+        return assignments
+
+    def download_course_files_all(self, course_ids, param):
+        logging.info("# Downloading Folders & Files")
+        for course_id, c_obj in course_ids.items():
+            c_name = c_obj['name']
+            logging.info(f"# Course: {c_name}")
+            save_path = c_obj['save_path']
+            if not self.download_helper.download_course_files(course_id, save_path, param):
+                continue
+
+        logging.info("")
+
+    def download_module_files_all(self, course_ids, param):
+        logging.info("# Downloading Any Additional Files in Modules")
+        for course_id, c_obj in course_ids.items():
+            c_name = c_obj['name']
+            logging.info(f"# Course: {c_name}")
+            save_path = c_obj['save_path']
+            if not self.download_helper.download_module_files(course_id, save_path, param):
+                continue
+
+        logging.info("")
+
+    def select_courses(self):
+        """
+        Allows the user to select the courses that they want to transfer while generating a dictionary
+        that has course ids as the keys and their names as the values
+        """
+        logging.info("# Fetching courses from Canvas:")
+        canvas = Canvas("https://canvas.instructure.com", self.api_key)
+        courses_pag = canvas.get_courses()
+
+        i = 1
+        for c in courses_pag:
+            try:
+                self.courses_id_name_dict[c.id] = f"{c.course_code.replace(' ', '')} - {c.name} [ID: {c.id}]"
+                i += 1
+            except AttributeError:
+                logging.info("  - Skipping invalid course entry.")
+
+        logging.info(f"=> Found {len(self.courses_id_name_dict)} courses")
+        courses = self.config_helper.get('courses')
+        if courses is not None:
+            logging.info("")
+            logging.info("# You have previously selected courses:")
+            for i, (c_id, c_obj) in enumerate(courses.items()):
+                try:
+                    c_name = c_obj['name']
+                except TypeError:
+                    c_name = c_obj
+                    courses[c_id] = {'name': c_name}
+                logging.info(f'  {i + 1}. {c_name} [ID: {c_id}]')
+            if not self.skip_confirmation_prompts:
+                use_previous_input = input(
+                    "Q: Would you like to use the courses selected last time? (Y/n) ")
+            else:
+                use_previous_input = "y"
+            logging.info("")
+            if use_previous_input.lower() == "y":
+                self.course_ids = courses
+                # for c_id, c_obj in self.config['courses'].items():
+                #     c_name = c_obj['name']
+                #     course_ids[c_id] = {'name': c_name}
+                return
+
+        title = "Select the course(s) you would like to add to Todoist (press SPACE to mark, ENTER to continue):"
+
+        sorted_ids, sorted_courses = zip(
+            *sorted(self.courses_id_name_dict.items(), key=itemgetter(0)))
+
+        selected = pick(sorted_courses, title,
+                        multiselect=True, min_selection_count=1)
+
+        logging.info("# SELECTED COURSES:")
+        logging.info(
+            "# If you would like to rename a course as it appears on Todoist, enter the new name below.")
+        logging.info(
+            "# To use the course name as it appears on Canvas, leave the field blank.")
+
+        todoist_project_names = self.todoist_helper.get_project_names()
+        for i, (course_name, index) in enumerate(selected):
+            course_id = str(sorted_ids[index])
+            course_name_prev = course_name
+            logging.info(f" {i + 1}) {course_name_prev}")
+
+            pick_title = f"{i + 1}) {course_name_prev}\n"
+            pick_title += f"    Select a pre-existing project?"
+
+            options = list(todoist_project_names)
+            options.append("+ Create new project")
+
+            course_name_new, indices = pick(options, pick_title)
+
+            if selected == "+ Create new project":
+                course_name_new = input("\t- Project Name: ")
+
+            self.course_ids[course_id] = course_name_new
+
+        # write course ids to self.config file
+        self.config_helper.set('courses', self.course_ids)
+
+
+class CanvasDownloadHelper():
+    def __init__(self, api_key, canvas_api_heading="https://canvas.instructure.com"):
+        self.canvas_api_heading = canvas_api_heading
+        self.header = {"Authorization": f"Bearer {api_key.strip()}"}
+
+    def download_course_files(self, course_id, save_path, param=None):
+        if param is None:
+            param = {}
+
+        response = requests.get(self.canvas_api_heading + '/api/v1/courses/' +
+                                str(course_id) + '/folders', headers=self.header,
+                                params=param)
+        if response.status_code == 401:
+            return False
+        for folder in response.json():
+            folder_name = folder['full_name']
+            # Replace +, _, -, and spaces with -
+            folder_name = re.sub(r'[\s+_\-:]+', '-', folder_name)
+
+            folder_path = os.path.join(save_path, folder_name.lower())
+            os.makedirs(folder_path, exist_ok=True)
+
+            folder_files_url = folder['files_url']
+            folder_files_response = requests.get(folder_files_url, headers=self.header, params=param)
+
+            reason_clean = folder_files_response.reason.replace(" ", "-")
+            with open(os.path.join(folder_path, f'{reason_clean}.json'), 'w') as f:
+                json.dump(folder_files_response.json(), f, indent=4)
+
+            if folder_files_response.status_code == 401:
+                logging.info(f"  * Folder: `{folder_name}` => "
+                             f"{folder_files_response.status_code} - {folder_files_response.reason}")
+                return False
+
+            folders_count = folder['folders_count']
+            files_count = folder['files_count']
+            logging.info(f" * Folder `{folder_name}` (Folders: {folders_count}, Files: {files_count})")
+
+            for file in folder_files_response.json():
+                self.download_file_handler(file, folder_path)
+
+        return True
+
+    def download_module_files(self, course_id, save_path, param=None):
+        response = requests.get(self.canvas_api_heading + '/api/v1/courses/' +
+                                str(course_id) + '/helpers', headers=self.header,
+                                params=param)
+        if response.status_code == 401:
+            return False
+
+        for module in response.json():
+            module_name = module['name']
+            # Replace +, _, -, and spaces with -
+            module_name = re.sub(r'[\s+_\-:]+', '-', module_name)
+
+            logging.info(f"  * Module: `{module_name}`")
+            items_url = module['items_url']
+            items_url_response = requests.get(items_url, headers=self.header, params=param)
+
+            for item in items_url_response.json():
+                file_type = item['type']
+                if file_type != "File":
+                    return False
+
+                html_url = item['url']
+                html_url_response = requests.get(html_url, headers=self.header)
+                html_url_response_json = html_url_response.json()
+                self.download_file_handler(html_url_response_json,
+                                           os.path.join(save_path, "course-files"),
+                                           module_name.lower())
+
+        return True
+
+    def download_file_handler(self, file_obj, folder_path, subfolder_name=None):
+        os.makedirs(folder_path, exist_ok=True)
+        file_name = file_obj['filename']
+        # Replace any occurance of %XX with a -
+        file_name = re.sub(r'%[0-9a-fA-F][0-9a-fA-F]', '-', file_name)
+        # Replace +, _, -, and spaces with -
+        file_name = re.sub(r'[\s+_\-:]+', '-', file_name)
+
+        file_path = os.path.join(folder_path, file_name)
+
+        file_url = file_obj['url']
+        file_size = file_obj['size']
+        file_size_mb = round(file_size / 1000000, 2)
+
+        # Download the file to folder
+        if not os.path.isfile(file_path) and subfolder_name is not None:
+            return self.download_file_handler(file_obj, os.path.join(folder_path, subfolder_name))
+
+        logging.info(f"    - Downloading `{file_name}` (size: {file_size} bytes, {file_size_mb} MB)")
+        if os.path.isfile(file_path):
+            # Get size in bytes of filepath
+            existing_size = os.path.getsize(file_path)
+            if existing_size == file_size:
+                logging.info(f"      - File on disk has matching size = {existing_size}. Skipping...")
+                return False
+
+            logging.info(f"      - File needs updating: Current Size = {existing_size} => New Size = {file_size}")
+
+        if file_url == '':
+            logging.info(f"      - No URL found for file. Skipping...")
+            logging.info(f"      - Lock explanation: {file_obj['lock_explanation']}")
+
+            with open(f'{file_path}-locked.json', 'w') as f:
+                json.dump(file_obj, f, indent=4)
+
+            return False
+
+        r = requests.get(file_url, stream=True)
+        with open(file_path, 'wb') as f:
+            for chunk in r.iter_content(chunk_size=1024):
+                if chunk:
+                    f.write(chunk)
+
+        return True
