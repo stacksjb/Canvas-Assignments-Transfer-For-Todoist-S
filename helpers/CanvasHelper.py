@@ -155,12 +155,12 @@ class CanvasDownloadHelper():
     def download_course_files(self, course_id, save_path, param=None):
         if param is None:
             param = {}
-
         response = requests.get(self.canvas_api_heading + '/api/v1/courses/' +
                                 str(course_id) + '/folders', headers=self.header,
                                 params=param)
         if response.status_code != 200:
             return False
+
         for folder in response.json():
             folder_name = folder['full_name']
             # Replace +, _, -, and spaces with -
@@ -191,6 +191,8 @@ class CanvasDownloadHelper():
         return True
 
     def download_module_files(self, course_id, save_path, param=None):
+        if param is None:
+            param = {}
         response = requests.get(self.canvas_api_heading + '/api/v1/courses/' +
                                 str(course_id) + '/helpers', headers=self.header,
                                 params=param)
