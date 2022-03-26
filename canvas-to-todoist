@@ -567,7 +567,7 @@ def transfer_assignments_to_todoist():
 
         # Handle cases for adding and updating tasks on Todoist
         if not is_added:
-            if c_a['submission']['submitted_at'] is None:
+            if c_a['submission']['workflow_state'] == "unsubmitted":
                 add_new_task(c_a, t_proj_id)
                 summary['added'].append(c_a)
             else:
