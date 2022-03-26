@@ -63,6 +63,8 @@ class CanvasFileDownloader:
         self.config_helper = ConfigHelper(self.config_path, self.input_prompt, self.skip_confirmation_prompts)
 
         self.canvas_helper = CanvasHelper(self.config_helper.get('canvas_api_key'))
+        self.selected_course_ids = self.canvas_helper.select_courses(self.config_helper,
+                                                                     skip_confirmation_prompts=self.skip_confirmation_prompts)
 
     def run(self):
         if not self.skip_confirmation_prompts:
@@ -73,20 +75,20 @@ class CanvasFileDownloader:
 
         if use_previous_input.lower() == "y":
             self.load_save_paths()
-            self.canvas_helper.download_course_files_all(self.canvas_helper.course_ids, self.param)
-            self.canvas_helper.download_module_files_all(self.canvas_helper.course_ids, self.param)
+            self.canvas_helper.download_course_files_all(self.selected_course_ids, self.param)
+            self.canvas_helper.download_module_files_all(self.selected_course_ids, self.param)
 
     def load_save_paths(self):
         has_missing = False
 
-        for i, (c_id, c_obj) in enumerate(self.canvas_helper.course_ids.items()):
+        for i, (c_id, c_obj) in enumerate(self.selected_course_ids.items()):
             if 'save_path' not in c_obj or c_obj['save_path'] == "" or c_obj['save_path'] is None:
                 has_missing = True
                 break
 
         if not has_missing:
             logging.info("# You have previously selected download paths:")
-            for i, (c_id, c_obj) in enumerate(self.canvas_helper.course_ids.items()):
+            for i, (c_id, c_obj) in enumerate(self.selected_course_ids.items()):
                 logging.info(f"  {i + 1}. {c_obj['name']}: `{c_obj['save_path']}`")
             if not self.skip_confirmation_prompts:
                 use_previous_input = input(
@@ -97,7 +99,7 @@ class CanvasFileDownloader:
             if use_previous_input.lower() == "y":
                 return
 
-        for course_id, c_obj in self.canvas_helper.course_ids.items():
+        for course_id, c_obj in self.selected_course_ids.items():
             c_name = c_obj['name']
             logging.info(f"# Course: {c_name}")
 
@@ -110,11 +112,11 @@ class CanvasFileDownloader:
             save_path = input(f"  - Enter new path, or press return to use default: ")
             if save_path.strip() == "":
                 save_path = def_save_path
-            self.canvas_helper.course_ids[course_id]['save_path'] = save_path
+            self.selected_course_ids[course_id]['save_path'] = save_path
 
         logging.info("")
 
-        self.config_helper.set('courses', self.canvas_helper.course_ids)
+        self.config_helper.set('courses', self.selected_course_ids)
 
 
 class CanvasToTodoist:
@@ -123,6 +125,7 @@ class CanvasToTodoist:
         self.skip_confirmation_prompts = skip_confirmation_prompts
         self.param = {'per_page': '100', 'include': 'submission'}
         self.input_prompt = "> "
+        self.selected_course_ids = None
 
         # Loaded configuration files
         self.config_path = os.path.join(os_config_path, "config.json")
@@ -132,13 +135,16 @@ class CanvasToTodoist:
         self.todoist_helper = TodoistHelper(self.config_helper.get('todoist_api_key'))
 
     def run(self):
-        self.canvas_helper.select_courses()
+        todoist_project_names = self.todoist_helper.get_project_names()
+        self.selected_course_ids = self.canvas_helper.select_courses(self.config_helper,
+                                                                     todoist_project_names,
+                                                                     self.skip_confirmation_prompts)
 
-        course_names = self.canvas_helper.get_course_names(self.canvas_helper.course_ids)
+        course_names = self.canvas_helper.get_course_names(self.selected_course_ids)
 
         self.todoist_helper.create_projects(course_names)
 
-        assignments = self.canvas_helper.get_assignments(self.canvas_helper.course_ids, self.param)
+        assignments = self.canvas_helper.get_assignments(self.selected_course_ids, self.param)
         self.transfer_assignments_to_todoist(assignments)
         logging.info("# Finished!")
 
@@ -178,7 +184,7 @@ class CanvasToTodoist:
             # Get the canvas assignment name, due date, course name, todoist project id
             c_n = c_a['name']
             c_d = c_a['due_at']
-            c_cn = self.canvas_helper.course_ids[str(c_a['course_id'])]['name']
+            c_cn = self.selected_course_ids[str(c_a['course_id'])]['name']
             t_proj_id = self.todoist_helper.get_project_id(c_cn)
 
             # Find the corresponding priority based on the assignment properties
@@ -242,7 +248,7 @@ class CanvasToTodoist:
                 logging.info(f"  * {cat.upper()}: {len(a_list)}")
                 for i, c_a in enumerate(a_list):
                     c_n = c_a['name']
-                    c_cn = self.canvas_helper.course_ids[str(c_a['course_id'])]['name']
+                    c_cn = self.selected_course_ids[str(c_a['course_id'])]['name']
                     a_p = c_a['priority']
                     a_d = c_a['due_at']
                     d = None

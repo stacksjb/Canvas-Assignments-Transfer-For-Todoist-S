@@ -2,9 +2,11 @@ import json
 import logging
 import os
 import re
+from operator import itemgetter
 
 import requests
 from canvasapi import Canvas
+from pick import pick
 
 
 class CanvasHelper:
@@ -14,7 +16,6 @@ class CanvasHelper:
         self.canvas_api_heading = canvas_api_heading
         self.header = {"Authorization": f"Bearer {api_key.strip()}"}
         self.download_helper = CanvasDownloadHelper(api_key)
-        self.course_ids = {}
         self.courses_id_name_dict = {}
 
     @staticmethod
@@ -29,7 +30,7 @@ class CanvasHelper:
 
     def get_assignments(self, course_ids, param):
         """
-        Iterates over the course_ids list and loads all the users assignments for those classes.
+        Iterates over the selected_course_ids list and loads all the users assignments for those classes.
         Appends assignment objects to assignments list.
         """
         logging.info("# Loading assignments from Canvas")
@@ -68,11 +69,13 @@ class CanvasHelper:
 
         logging.info("")
 
-    def select_courses(self):
+    def select_courses(self, config_helper, rename_list=None, skip_confirmation_prompts=False):
         """
         Allows the user to select the courses that they want to transfer while generating a dictionary
         that has course ids as the keys and their names as the values
         """
+        if rename_list is None:
+            rename_list = []
         logging.info("# Fetching courses from Canvas:")
         canvas = Canvas("https://canvas.instructure.com", self.api_key)
         courses_pag = canvas.get_courses()
@@ -86,7 +89,7 @@ class CanvasHelper:
                 logging.info("  - Skipping invalid course entry.")
 
         logging.info(f"=> Found {len(self.courses_id_name_dict)} courses")
-        courses = self.config_helper.get('courses')
+        courses = config_helper.get('courses')
         if courses is not None:
             logging.info("")
             logging.info("# You have previously selected courses:")
@@ -97,20 +100,16 @@ class CanvasHelper:
                     c_name = c_obj
                     courses[c_id] = {'name': c_name}
                 logging.info(f'  {i + 1}. {c_name} [ID: {c_id}]')
-            if not self.skip_confirmation_prompts:
+            if not skip_confirmation_prompts:
                 use_previous_input = input(
                     "Q: Would you like to use the courses selected last time? (Y/n) ")
             else:
                 use_previous_input = "y"
             logging.info("")
             if use_previous_input.lower() == "y":
-                self.course_ids = courses
-                # for c_id, c_obj in self.config['courses'].items():
-                #     c_name = c_obj['name']
-                #     course_ids[c_id] = {'name': c_name}
-                return
+                return courses
 
-        title = "Select the course(s) you would like to add to Todoist (press SPACE to mark, ENTER to continue):"
+        title = "Select the course(s) you would like to use (press SPACE to mark, ENTER to continue):"
 
         sorted_ids, sorted_courses = zip(
             *sorted(self.courses_id_name_dict.items(), key=itemgetter(0)))
@@ -120,31 +119,32 @@ class CanvasHelper:
 
         logging.info("# SELECTED COURSES:")
         logging.info(
-            "# If you would like to rename a course as it appears on Todoist, enter the new name below.")
+            "# If you would like to set a different name, enter the new name below.")
         logging.info(
             "# To use the course name as it appears on Canvas, leave the field blank.")
 
-        todoist_project_names = self.todoist_helper.get_project_names()
+        selected_courses = {}
         for i, (course_name, index) in enumerate(selected):
             course_id = str(sorted_ids[index])
             course_name_prev = course_name
             logging.info(f" {i + 1}) {course_name_prev}")
 
             pick_title = f"{i + 1}) {course_name_prev}\n"
-            pick_title += f"    Select a pre-existing project?"
+            pick_title += f"    Select a match?"
 
-            options = list(todoist_project_names)
-            options.append("+ Create new project")
+            options = list(rename_list)
+            options.append("+ Create new name")
 
             course_name_new, indices = pick(options, pick_title)
 
-            if selected == "+ Create new project":
-                course_name_new = input("\t- Project Name: ")
+            if selected == "+ Create new name":
+                course_name_new = input("\t- Name: ")
 
-            self.course_ids[course_id] = course_name_new
+            selected_courses[course_id] = course_name_new
 
         # write course ids to self.config file
-        self.config_helper.set('courses', self.course_ids)
+        config_helper.set('courses', selected_courses)
+        return selected_courses
 
 
 class CanvasDownloadHelper():
@@ -194,7 +194,7 @@ class CanvasDownloadHelper():
         response = requests.get(self.canvas_api_heading + '/api/v1/courses/' +
                                 str(course_id) + '/helpers', headers=self.header,
                                 params=param)
-        if response.status_code == 401:
+        if response.status_code != 200:
             return False
 
         for module in response.json():
