@@ -115,6 +115,12 @@ def save_config():
     with open(config_path, 'w') as f:
         json.dump(config, f, indent=4)
 
+def send_notification(title, message):
+    notification = Notify()
+
+    notification.title = title
+    notification.message = message
+    notification.send()
 
 def initialize_api():
     """
@@ -596,11 +602,10 @@ def transfer_assignments_to_todoist():
 
     if len(summary['added']) > 0 or len(summary['updated']) > 0:
         logging.info("New tasks added or updated. Sending notification.")
-        notification = Notify()
-        notification.title = f"Canvas to Todoist (Total: {len(assignments)})"
-        notification.message = f"Added {len(summary['added'])} & Updated {len(summary['updated'])}.\n" \
+        n_title = f"Canvas to Todoist (Total: {len(assignments)})"
+        n_msg = f"Added {len(summary['added'])} & Updated {len(summary['updated'])}.\n" \
                                f"Completed: {len(summary['is-submitted'])} & Up-to-Date {len(summary['up-to-date'])}."
-        notification.send()
+        send_notification(n_title, n_msg)
     else:
         logging.info("No new tasks added or updated. Skipping notification.")
 
