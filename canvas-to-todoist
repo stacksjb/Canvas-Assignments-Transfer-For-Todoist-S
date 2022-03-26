@@ -21,25 +21,25 @@ import argparse
 import json
 import logging
 import os
-import re
 import sys
 from datetime import datetime
 from operator import itemgetter
 
-import requests
-from appdirs import *
+import appdirs
 from canvasapi import Canvas
-from notifypy import Notify
 from pick import pick
-from todoist.api import TodoistAPI
+
+from CanvasHelper import CanvasHelper
+from NotificationHelper import NotificationHelper
+from TodoistHelper import TodoistHelper
 
 appname = "CanvasToTodoist"
 appauthor = "GitHub Community"
-os_save_path = user_data_dir(appname, appauthor)
+os_save_path = appdirs.user_data_dir(appname, appauthor)
 os.makedirs(os_save_path, exist_ok=True)
-os_config_path = user_config_dir(appname, appauthor)
+os_config_path = appdirs.user_config_dir(appname, appauthor)
 os.makedirs(os_config_path, exist_ok=True)
-os_log_path = user_log_dir(appname, appauthor)
+os_log_path = appdirs.user_log_dir(appname, appauthor)
 os.makedirs(os_log_path, exist_ok=True)
 
 # Set up logging
@@ -55,27 +55,363 @@ logging.basicConfig(
     handlers=log_handlers
 )
 
-# Loaded configuration files
-config_fn = "config.json"
-config_path = os.path.join(os_config_path, config_fn)
-config = {}
-header = {}
-param = {'per_page': '100', 'include': 'submission'}
-course_ids = {}
-assignments = []
-todoist_tasks = []
-courses_id_name_dict = {}
-todoist_project_dict = {}
-input_prompt = "> "
 
-# Parse arguments and extract boolean flag -y which defaults to false
-parser = argparse.ArgumentParser(
-    description='Transfer Canvas assignments to Todoist')
-parser.add_argument('-y', '--yes', action='store_true',
-                    help='Skip confirmation prompts')
-# Get value of -y flag
-args = parser.parse_args()
-skip_confirmation_prompts = args.yes
+class CanvasToTodoist:
+
+    def __init__(self, skip_confirmation_prompts=False):
+        self.skip_confirmation_prompts = skip_confirmation_prompts
+        # Loaded configuration files
+        self.config_path = os.path.join(os_config_path, "config.json")
+        self.config = self.load_config()
+        if not self.config:
+            self.create_config()
+
+        self.param = {'per_page': '100', 'include': 'submission'}
+        self.course_ids = {}
+        self.courses_id_name_dict = {}
+        self.input_prompt = "> "
+
+        self.todoist_helper = TodoistHelper(self.config['todoist_api_key'])
+
+    def run(self):
+        self.select_courses()
+
+        if not self.skip_confirmation_prompts:
+            use_previous_input = input(
+                "Q: Would you like to download all files for these courses? (Y/n) ")
+        else:
+            use_previous_input = "y"
+
+        canvas_helper = CanvasHelper(self.config['canvas_api_key'])
+        # if use_previous_input.lower() == "y":
+        #     self.load_save_paths()
+        #     canvas_helper.download_course_files_all(self.course_ids, self.param)
+        #     canvas_helper.download_module_files_all(self.course_ids, self.param)
+
+        assignments = canvas_helper.load_assignments(self.course_ids, self.param)
+
+        course_names = self.get_course_names(self.course_ids)
+
+        self.todoist_helper.create_todoist_projects(course_names)
+
+        self.transfer_assignments_to_todoist(assignments)
+        logging.info("# Finished!")
+
+    @staticmethod
+    def get_course_names(course_ids):
+        logging.info("# Getting Course Names...")
+
+        course_names = []
+        for course_obj in course_ids.values():
+            course_names.append(course_obj['name'])
+        logging.info("")
+        return course_names
+
+    def load_config(self):
+        # Load self.config file
+        datetime_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        logging.info(f"# Reading configuration... {datetime_str}")
+        logging.info(f"  - Config Path: {self.config_path}")
+
+        config = {}
+        try:
+            with open(self.config_path) as config_file:
+                config = json.load(config_file)
+        except FileNotFoundError:
+            logging.warning("Config file not found. Creating self.config file...")
+
+        return config
+
+    def create_config(self):
+        if 'canvas_api_heading' not in self.config:
+            self.config['canvas_api_heading'] = "https://canvas.instructure.com"
+
+        if 'todoist_api_key' not in self.config or len(self.config['todoist_api_key']) == 0:
+            logging.info("Your Todoist API key has not been configured!\n"
+                         "To add an API token, go to your Todoist settings and "
+                         "copy the API token listed under the Integrations Tab.\n"
+                         "Copy the token and paste below when you are done.")
+            if self.skip_confirmation_prompts:
+                logging.error(
+                    "You must configure your Todoist API key. Please run without -y argument to configure.")
+                sys.exit(1)
+            self.config['todoist_api_key'] = input(self.input_prompt)
+        if 'canvas_api_key' not in self.config or len(self.config['canvas_api_key']) == 0:
+            logging.info("Your Canvas API key has not been configured!\n"
+                         "To add an API token, go to your Canvas settings and"
+                         "click on New Access Token under Approved Integrations.\n"
+                         "Copy the token and paste below when you are done.")
+            if self.skip_confirmation_prompts:
+                logging.error(
+                    "You must configure your Canvas API key. Please run without -y argument to configure.")
+                sys.exit(1)
+            self.config['canvas_api_key'] = input(self.input_prompt)
+
+        self.save_config()
+
+    def save_config(self):
+        """
+        Saves the configuration file to disk.
+        """
+        with open(self.config_path, 'w') as f:
+            json.dump(self.config, f, indent=4)
+
+    def select_courses(self):
+        """
+        Allows the user to select the courses that they want to transfer while generating a dictionary
+        that has course ids as the keys and their names as the values
+        """
+        logging.info("# Fetching courses from Canvas:")
+        canvas = Canvas("https://canvas.instructure.com", self.config['canvas_api_key'])
+        courses_pag = canvas.get_courses()
+
+        i = 1
+        for c in courses_pag:
+            try:
+                self.courses_id_name_dict[c.id] = f"{c.course_code.replace(' ', '')} - {c.name} [ID: {c.id}]"
+                i += 1
+            except AttributeError:
+                logging.info("  - Skipping invalid course entry.")
+
+        logging.info(f"=> Found {len(self.courses_id_name_dict)} courses")
+
+        if 'courses' in self.config and self.config['courses']:
+            logging.info("")
+            logging.info("# You have previously selected courses:")
+            for i, (c_id, c_obj) in enumerate(self.config['courses'].items()):
+                try:
+                    c_name = c_obj['name']
+                except TypeError:
+                    c_name = c_obj
+                    self.config['courses'][c_id] = {'name': c_name}
+                logging.info(f'  {i + 1}. {c_name} [ID: {c_id}]')
+            if not self.skip_confirmation_prompts:
+                use_previous_input = input(
+                    "Q: Would you like to use the courses selected last time? (Y/n) ")
+            else:
+                use_previous_input = "y"
+            logging.info("")
+            if use_previous_input.lower() == "y":
+                self.course_ids = self.config['courses']
+                # for c_id, c_obj in self.config['courses'].items():
+                #     c_name = c_obj['name']
+                #     course_ids[c_id] = {'name': c_name}
+                return
+
+        title = "Select the course(s) you would like to add to Todoist (press SPACE to mark, ENTER to continue):"
+
+        sorted_ids, sorted_courses = zip(
+            *sorted(self.courses_id_name_dict.items(), key=itemgetter(0)))
+
+        selected = pick(sorted_courses, title,
+                        multiselect=True, min_selection_count=1)
+
+        logging.info("# SELECTED COURSES:")
+        logging.info(
+            "# If you would like to rename a course as it appears on Todoist, enter the new name below.")
+        logging.info(
+            "# To use the course name as it appears on Canvas, leave the field blank.")
+
+        todoist_project_names = self.todoist_helper.get_project_names()
+        for i, (course_name, index) in enumerate(selected):
+            course_id = str(sorted_ids[index])
+            course_name_prev = course_name
+            logging.info(f" {i + 1}) {course_name_prev}")
+
+            pick_title = f"{i + 1}) {course_name_prev}\n"
+            pick_title += f"    Select a pre-existing project?"
+
+            options = list(todoist_project_names)
+            options.append("+ Create new project")
+
+            course_name_new, indices = pick(options, pick_title)
+
+            if selected == "+ Create new project":
+                course_name_new = input("\t- Project Name: ")
+
+            self.course_ids[course_id] = course_name_new
+
+        # write course ids to self.config file
+        self.config['courses'] = self.course_ids
+        self.save_config()
+
+    def load_save_paths(self):
+        has_missing = False
+
+        for i, (c_id, c_obj) in enumerate(self.course_ids.items()):
+            if 'save_path' not in c_obj or c_obj['save_path'] == "" or c_obj['save_path'] is None:
+                has_missing = True
+                break
+
+        if not has_missing:
+            logging.info("# You have previously selected download paths:")
+            for i, (c_id, c_obj) in enumerate(self.course_ids.items()):
+                logging.info(f"  {i + 1}. {c_obj['name']}: `{c_obj['save_path']}`")
+            if not self.skip_confirmation_prompts:
+                use_previous_input = input(
+                    "Q: Would you like to use the download paths selected last time? (Y/n) ")
+            else:
+                use_previous_input = "y"
+            logging.info("")
+            if use_previous_input.lower() == "y":
+                return
+
+        for course_id, c_obj in self.course_ids.items():
+            c_name = c_obj['name']
+            logging.info(f"# Course: {c_name}")
+
+            def_save_path = os.path.join(os_save_path, c_name)
+            logging.info(f"  - Default: {def_save_path}")
+            if self.skip_confirmation_prompts:
+                logging.error("You must configure save paths."
+                              "Please run without -y argument to configure.")
+                sys.exit(1)
+            save_path = input(f"  - Enter new path, or press return to use default: ")
+            if save_path.strip() == "":
+                save_path = def_save_path
+            self.course_ids[course_id]['save_path'] = save_path
+
+        logging.info("")
+        self.config['courses'] = self.course_ids
+        self.save_config()
+
+    def check_existing_task(self, assignment, project_id):
+        """
+        Checks to see if a task already exists for the assignment.
+        Return flags for whether the task exists and if it needs to be updated,
+        as well as the corresponding task object.
+        """
+        is_added = False
+        is_synced = True
+        item = None
+        for task in self.todoist_helper.get_tasks():
+            task_title = TodoistHelper.make_task_title(assignment)
+            # If title and project match, then the task already exists
+            if task['content'] == task_title and task['project_id'] == project_id:
+                is_added = True
+                # Check if the task is synced by comparing due dates and priority
+                if (task['due'] and task['due']['date'] != assignment['due_at']) or \
+                        task['priority'] != assignment['priority']:
+                    is_synced = False
+                    item = task
+                    break
+        return is_added, is_synced, item
+
+    def transfer_assignments_to_todoist(self, assignments):
+        """
+        Transfers over assignments from Canvas over to Todoist.
+        The method Checks to make sure the assignment has not already been transferred to prevent overlap.
+        """
+        logging.info("# Transferring assignments to Todoist...")
+
+        summary = {'added': [], 'updated': [],
+                   'is-submitted': [], 'up-to-date': []}
+
+        for i, c_a in enumerate(assignments):
+            # Get the canvas assignment name, due date, course name, todoist project id
+            c_n = c_a['name']
+            c_d = c_a['due_at']
+            c_cn = self.course_ids[str(c_a['course_id'])]['name']
+            t_proj_id = self.todoist_helper.get_project_id(c_cn)
+
+            # Find the corresponding priority based on the assignment properties
+            priority = TodoistHelper.find_priority(c_a)
+            c_a['priority'] = priority
+
+            # Check if the assignment already exists in Todoist and if it needs updating
+            is_added, is_synced, item = self.check_existing_task(c_a, t_proj_id)
+            logging.info(f"  {i + 1}. Assignment: \"{c_n}\"")
+
+            # Handle cases for adding and updating tasks on Todoist
+            if not is_added:
+                if c_a['submission']['workflow_state'] == "unsubmitted":
+                    self.todoist_helper.add_new_task(c_a, t_proj_id)
+                    summary['added'].append(c_a)
+                else:
+                    logging.info(f"     INFO: Already submitted, skipping...")
+                    summary['is-submitted'].append(c_a)
+            elif not is_synced:
+                self.update_task(c_a, item)
+                summary['updated'].append(c_a)
+            else:
+                logging.info(f"     OK: Task is already up to date!")
+                summary['up-to-date'].append(c_a)
+            logging.info(f"     Course: {c_cn}")
+            logging.info(f"     Due Date: {c_d}")
+            logging.info(f"     Priority: {TodoistHelper.get_priority_name(priority)}")
+
+        # Commit changes to Todoist
+        self.todoist_helper.api.commit(raise_on_error=True)
+
+        # Print out short summary
+        logging.info("")
+        logging.info(f"# Short Summary:")
+        logging.info(f"  * Added: {len(summary['added'])}")
+        logging.info(f"  * Updated: {len(summary['updated'])}")
+        logging.info(f"  * Already Submitted: {len(summary['is-submitted'])}")
+        logging.info(f"  * Up to Date: {len(summary['up-to-date'])}")
+
+        if len(summary['added']) > 0 or len(summary['updated']) > 0:
+            logging.info("New tasks added or updated. Sending notification.")
+            n_title = f"Canvas to Todoist (Total: {len(assignments)})"
+            n_msg = f"Added {len(summary['added'])} & Updated {len(summary['updated'])}.\n" \
+                    f"Completed: {len(summary['is-submitted'])} & Up-to-Date {len(summary['up-to-date'])}."
+            NotificationHelper.send_notification(n_title, n_msg)
+        else:
+            logging.info("No new tasks added or updated. Skipping notification.")
+
+        # Print detailed summary?
+        logging.info("")
+        if not self.skip_confirmation_prompts:
+            answer = input("Q: Print Detailed Summary? (Y/n): ")
+        else:
+            answer = "y"
+
+        if answer.lower() == 'y':
+            logging.info("")
+            logging.info(f"# Detailed Summary:")
+            for cat in reversed(summary.keys()):
+                a_list = summary[cat]
+                logging.info(f"  * {cat.upper()}: {len(a_list)}")
+                for i, c_a in enumerate(a_list):
+                    c_n = c_a['name']
+                    c_cn = self.course_ids[str(c_a['course_id'])]['name']
+                    a_p = c_a['priority']
+                    a_d = c_a['due_at']
+                    d = None
+                    if a_d:
+                        d = datetime.strptime(a_d, '%Y-%m-%dT%H:%M:%SZ')
+                    # Convert to format: May 22, 2022 at 12:00 PM
+                    d_nat = "Unknown" if d is None else d.strftime(
+                        '%b %d, %Y at %I:%M %p')
+                    logging.info(f"    {i + 1}. \"{c_n}\"")
+                    logging.info(f"         Course: {c_cn}")
+                    logging.info(f"         Due Date: {d_nat}")
+                    logging.info(f"         Priority: {TodoistHelper.get_priority_name(a_p)}")
+
+    @staticmethod
+    def update_task(c_a, t_task):
+        """
+        Updates an existing task from a Canvas assignment object to Todoist
+        """
+        updates_list = []
+        # Check if due date has changed
+        t_d = t_task['due']['date'] if t_task['due'] else None
+        c_d = c_a['due_at']
+        if t_d != c_d:
+            updates_list.append('due date')
+        # Check if priority has changed
+        t_p = t_task['priority']
+        c_p = c_a['priority']
+        # Print changes
+        if t_p != c_p:
+            updates_list.append('priority')
+        logging.info(f"     UPDATE: Updating Task: " + ", ".join(updates_list))
+        # Update Todoist task
+        t_task.update(due={
+            'date': c_d,
+        },
+            priority=c_p)
 
 
 def main():
@@ -85,596 +421,21 @@ def main():
     logging.info(f"Logs saved to: {log_path}")
     logging.info("")
 
+    # Parse arguments and extract boolean flag -y which defaults to false
+    parser = argparse.ArgumentParser(
+        description='Transfer Canvas assignments to Todoist')
+    parser.add_argument('-y', '--yes', action='store_true',
+                        help='Skip confirmation prompts')
+    # Get value of -y flag
+    args = parser.parse_args()
+    skip_confirmation_prompts = args.yes
+
     if skip_confirmation_prompts:
         logging.info("Skipping confirmation prompts")
 
-    initialize_api()
-    load_todoist_projects()
-    select_courses()
-    if not skip_confirmation_prompts:
-        use_previous_input = input(
-            "Q: Would you like to download all files for these courses? (Y/n) ")
-    else:
-        use_previous_input = "y"
-    if use_previous_input.lower() == "y":
-        load_save_paths()
-        download_files()
-        download_module_files()
+    ct = CanvasToTodoist(skip_confirmation_prompts)
 
-    load_assignments()
-    load_todoist_tasks()
-    create_todoist_projects()
-    transfer_assignments_to_todoist()
-    logging.info("# Finished!")
-
-
-def save_config():
-    """
-    Saves the configuration file to disk.
-    """
-    with open(config_path, 'w') as f:
-        json.dump(config, f, indent=4)
-
-def send_notification(title, message):
-    notification = Notify()
-
-    notification.title = title
-    notification.message = message
-    notification.send()
-
-def initialize_api():
-    """
-    Makes sure that the user has their API Keys set up and sets API variables
-    """
-    global config
-    global todoist_api
-
-    datetime_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    logging.info(f"# Reading configuration... {datetime_str}")
-    logging.info(f"  - Config Path: {config_path}")
-
-    # Load config file
-    try:
-        with open(config_path) as config_file:
-            config = json.load(config_file)
-    except FileNotFoundError:
-        logging.warning("Config file not found. Creating config file...")
-
-    if 'canvas_api_heading' not in config:
-        config['canvas_api_heading'] = "https://canvas.instructure.com"
-
-    if 'todoist_api_key' not in config or len(config['todoist_api_key']) == 0:
-        logging.info("Your Todoist API key has not been configured!\n"
-                     "To add an API token, go to your Todoist settings and "
-                     "copy the API token listed under the Integrations Tab.\n"
-                     "Copy the token and paste below when you are done.")
-        if skip_confirmation_prompts:
-            logging.error(
-                "You must configure your Todoist API key. Please run without -y argument to configure.")
-            sys.exit(1)
-        config['todoist_api_key'] = input(input_prompt)
-        save_config()
-    if 'canvas_api_key' not in config or len(config['canvas_api_key']) == 0:
-        logging.info("Your Canvas API key has not been configured!\n"
-                     "To add an API token, go to your Canvas settings and"
-                     "click on New Access Token under Approved Integrations.\n"
-                     "Copy the token and paste below when you are done.")
-        if skip_confirmation_prompts:
-            logging.error(
-                "You must configure your Canvas API key. Please run without -y argument to configure.")
-            sys.exit(1)
-        config['canvas_api_key'] = input(input_prompt)
-        save_config()
-
-    # create todoist_api object globally
-    todoist_api = TodoistAPI(config['todoist_api_key'].strip())
-    todoist_api.reset_state()
-    todoist_api.sync()
-    header.update({"Authorization": "Bearer " +
-                                    config['canvas_api_key'].strip()})
-
-
-def select_courses():
-    """
-    Allows the user to select the courses that they want to transfer while generating a dictionary
-    that has course ids as the keys and their names as the values
-    """
-    global config
-    global course_ids
-    logging.info("# Fetching courses from Canvas:")
-    canvas = Canvas("https://canvas.instructure.com", config['canvas_api_key'])
-    courses_pag = canvas.get_courses()
-
-    i = 1
-    for c in courses_pag:
-        try:
-            courses_id_name_dict[c.id] = f"{c.course_code.replace(' ', '')} - {c.name} [ID: {c.id}]"
-            i += 1
-        except AttributeError:
-            logging.info("  - Skipping invalid course entry.")
-
-    logging.info(f"=> Found {len(courses_id_name_dict)} courses")
-
-    if 'courses' in config and config['courses']:
-        logging.info("")
-        logging.info("# You have previously selected courses:")
-        for i, (c_id, c_obj) in enumerate(config['courses'].items()):
-            try:
-                c_name = c_obj['name']
-            except TypeError:
-                c_name = c_obj
-                config['courses'][c_id] = {'name': c_name}
-            logging.info(f'  {i + 1}. {c_name} [ID: {c_id}]')
-        if not skip_confirmation_prompts:
-            use_previous_input = input(
-                "Q: Would you like to use the courses selected last time? (Y/n) ")
-        else:
-            use_previous_input = "y"
-        logging.info("")
-        if use_previous_input.lower() == "y":
-            course_ids = config['courses']
-            # for c_id, c_obj in config['courses'].items():
-            #     c_name = c_obj['name']
-            #     course_ids[c_id] = {'name': c_name}
-            return
-
-    title = "Select the course(s) you would like to add to Todoist (press SPACE to mark, ENTER to continue):"
-
-    sorted_ids, sorted_courses = zip(
-        *sorted(courses_id_name_dict.items(), key=itemgetter(0)))
-
-    selected = pick(sorted_courses, title,
-                    multiselect=True, min_selection_count=1)
-
-    logging.info("# SELECTED COURSES:")
-    logging.info(
-        "# If you would like to rename a course as it appears on Todoist, enter the new name below.")
-    logging.info(
-        "# To use the course name as it appears on Canvas, leave the field blank.")
-    for i, (course_name, index) in enumerate(selected):
-        course_id = str(sorted_ids[index])
-        course_name_prev = course_name
-        logging.info(f" {i + 1}) {course_name_prev}")
-
-        pick_title = f"{i + 1}) {course_name_prev}\n"
-        pick_title += f"    Select a pre-existing project?"
-
-        options = list(todoist_project_dict.keys())
-        options.append("+ Create new project")
-
-        course_name_new, indices = pick(options, pick_title)
-
-        if selected == "+ Create new project":
-            course_name_new = input("\t- Project Name: ")
-
-        course_ids[course_id] = course_name_new
-
-    # write course ids to config file
-    config['courses'] = course_ids
-    save_config()
-
-
-def load_assignments():
-    """
-    Iterates over the course_ids list and loads all the users assignments for those classes.
-    Appends assignment objects to assignments list.
-    """
-    logging.info("# Loading assignments from Canvas")
-    for course_id in course_ids:
-        response = requests.get(config['canvas_api_heading'] + '/api/v1/courses/' +
-                                str(course_id) + '/assignments', headers=header,
-                                params=param)
-        if response.status_code == 401:
-            logging.info('Unauthorized! Check Canvas API Key')
-            exit()
-        for assignment in response.json():
-            assignments.append(assignment)
-
-
-def load_save_paths():
-    has_missing = False
-
-    for i, (c_id, c_obj) in enumerate(course_ids.items()):
-        if 'save_path' not in c_obj or c_obj['save_path'] == "" or c_obj['save_path'] is None:
-            has_missing = True
-            break
-
-    if not has_missing:
-        logging.info("# You have previously selected download paths:")
-        for i, (c_id, c_obj) in enumerate(course_ids.items()):
-            logging.info(f"  {i + 1}. {c_obj['name']}: `{c_obj['save_path']}`")
-        if not skip_confirmation_prompts:
-            use_previous_input = input(
-                "Q: Would you like to use the download paths selected last time? (Y/n) ")
-        else:
-            use_previous_input = "y"
-        logging.info("")
-        if use_previous_input.lower() == "y":
-            return
-
-    for course_id, c_obj in course_ids.items():
-        c_name = c_obj['name']
-        logging.info(f"# Course: {c_name}")
-
-        def_save_path = os.path.join(os_save_path, c_name)
-        logging.info(f"  - Default: {def_save_path}")
-        if skip_confirmation_prompts:
-            logging.error("You must configure save paths."
-                          "Please run without -y argument to configure.")
-            sys.exit(1)
-        save_path = input(f"  - Enter new path, or press return to use default: ")
-        if save_path.strip() == "":
-            save_path = def_save_path
-        course_ids[course_id]['save_path'] = save_path
-
-    logging.info("")
-    config['courses'] = course_ids
-    save_config()
-
-
-def download_file_handler(file_obj, folder_path, subfolder_name=None):
-    os.makedirs(folder_path, exist_ok=True)
-    file_name = file_obj['filename']
-    # Replace any occurance of %XX with a -
-    file_name = re.sub(r'%[0-9a-fA-F][0-9a-fA-F]', '-', file_name)
-    # Replace +, _, -, and spaces with -
-    file_name = re.sub(r'[\s+_\-:]+', '-', file_name)
-
-    file_path = os.path.join(folder_path, file_name)
-
-    file_url = file_obj['url']
-    file_size = file_obj['size']
-    file_size_mb = round(file_size / 1000000, 2)
-
-    # Download the file to folder
-    if not os.path.isfile(file_path) and subfolder_name is not None:
-        return download_file_handler(file_obj, os.path.join(folder_path, subfolder_name))
-    
-    logging.info(f"    - Downloading `{file_name}` (size: {file_size} bytes, {file_size_mb} MB)")
-    if os.path.isfile(file_path):
-        # Get size in bytes of filepath
-        existing_size = os.path.getsize(file_path)
-        if existing_size == file_size:
-            logging.info(f"      - File on disk has matching size = {existing_size}. Skipping...")
-            return False
-
-        logging.info(f"      - File needs updating: Current Size = {existing_size} => New Size = {file_size}")
-
-    if file_url == '':
-        logging.info(f"      - No URL found for file. Skipping...")
-        logging.info(f"      - Lock explanation: {file_obj['lock_explanation']}")
-
-        with open(f'{file_path}-locked.json', 'w') as f:
-            json.dump(file_obj, f, indent=4)
-
-        return False
-
-    r = requests.get(file_url, stream=True)
-    with open(file_path, 'wb') as f:
-        for chunk in r.iter_content(chunk_size=1024):
-            if chunk:
-                f.write(chunk)
-
-    return True
-
-
-def download_files():
-    logging.info("# Downloading Folders & Files")
-    for course_id, c_obj in course_ids.items():
-        c_name = c_obj['name']
-        logging.info(f"# Course: {c_name}")
-        response = requests.get(config['canvas_api_heading'] + '/api/v1/courses/' +
-                                str(course_id) + '/folders', headers=header,
-                                params=param)
-        if response.status_code == 401:
-            continue
-        for folder in response.json():
-            folder_name = folder['full_name']
-            # Replace +, _, -, and spaces with -
-            folder_name = re.sub(r'[\s+_\-:]+', '-', folder_name)
-
-            folder_path = os.path.join(c_obj['save_path'], folder_name.lower())
-            os.makedirs(folder_path, exist_ok=True)
-
-            folder_files_url = folder['files_url']
-            folder_files_response = requests.get(folder_files_url, headers=header, params=param)
-
-            reason_clean = folder_files_response.reason.replace(" ", "-")
-            with open(os.path.join(folder_path, f'{reason_clean}.json'), 'w') as f:
-                json.dump(folder_files_response.json(), f, indent=4)
-
-            if folder_files_response.status_code == 401:
-                logging.info(f"  * Folder: `{folder_name}` => "
-                             f"{folder_files_response.status_code} - {folder_files_response.reason}")
-                continue
-
-            folders_count = folder['folders_count']
-            files_count = folder['files_count']
-            logging.info(f" * Folder `{folder_name}` (Folders: {folders_count}, Files: {files_count})")
-
-            for file in folder_files_response.json():
-                download_file_handler(file, folder_path)
-
-    logging.info("")
-
-
-def download_module_files():
-    logging.info("# Downloading Any Additional Files in Modules")
-    for course_id, c_obj in course_ids.items():
-        c_name = c_obj['name']
-        logging.info(f"# Course: {c_name}")
-        response = requests.get(config['canvas_api_heading'] + '/api/v1/courses/' +
-                                str(course_id) + '/modules', headers=header,
-                                params=param)
-        if response.status_code == 401:
-            continue
-
-        for module in response.json():
-            module_name = module['name']
-            # Replace +, _, -, and spaces with -
-            module_name = re.sub(r'[\s+_\-:]+', '-', module_name)
-
-            logging.info(f"  * Module: `{module_name}`")
-            items_url = module['items_url']
-            items_url_response = requests.get(items_url, headers=header, params=param)
-
-            for item in items_url_response.json():
-                file_type = item['type']
-                if file_type != "File":
-                    continue
-
-                html_url = item['url']
-                html_url_response = requests.get(html_url, headers=header)
-                html_url_response_json = html_url_response.json()
-                download_file_handler(html_url_response_json,
-                                      os.path.join(c_obj['save_path'], "course-files"),
-                                      module_name.lower())
-
-    logging.info("")
-
-
-def load_todoist_tasks():
-    """
-    Loads all user tasks from Todoist
-    """
-    tasks = todoist_api.state['items']
-    for task in tasks:
-        todoist_tasks.append(task)
-
-
-def load_todoist_projects():
-    """
-    Loads all user projects from Todoist
-    """
-    logging.info("# Loading Todoist projects...")
-    projects = todoist_api.state['projects']
-    for project in projects:
-        todoist_project_dict[project['name']] = project['id']
-
-
-def create_todoist_projects():
-    """
-    Checks to see if the user has a project matching their course names.
-    If there isn't, a new project will be created
-    """
-    logging.info("# Creating Todoist projects:")
-    for i, (course_id, course_obj) in enumerate(course_ids.items()):
-        course_name = course_obj['name']
-        if course_name not in todoist_project_dict:
-            # TODO: Add option to re-name course names
-
-            project = todoist_api.projects.add(course_name)
-            todoist_api.commit()
-            todoist_api.sync()
-
-            todoist_project_dict[project['name']] = project['id']
-            logging.info(f" - OK: Created Project: \"{course_name}\"")
-        else:
-            logging.info(
-                f"  {i + 1}. INFO: \"{course_name}\" already exists; skipping...")
-    logging.info("")
-
-
-def make_task_title(assignment):
-    """
-    Creates a task title from an assignment object
-    """
-    return '[' + assignment['name'] + '](' + assignment['html_url'] + ')'
-
-
-def get_priority_name(priority: int):
-    """
-    Returns the name of the priority level
-    """
-    priorities = {
-        1: "Normal",
-        2: "Medium",
-        3: "High",
-        4: "Urgent"
-    }
-    return priorities[priority]
-
-
-def find_priority(assignment) -> int:
-    """
-    Finds the priority level of an assignment
-    Task priority from 1 (normal, default value) to 4 (urgent).
-    1: Normal, 2: Medium, 3: High, 4: Urgent
-    """
-    assignment_name = assignment['name']
-    assignment_due_at = assignment['due_at']
-    priority = 1
-
-    keywords = {
-        4: ['exam', 'test', 'midterm', 'final'],
-        3: ['project', 'paper', 'quiz', 'homework', 'discussion'],
-        2: ['reading', 'assignment']
-    }
-
-    for p, keywords in keywords.items():
-        if p > priority and any(keyword in assignment_name.lower() for keyword in keywords):
-            priority = p
-
-    if assignment_due_at is not None:
-        due_at = datetime.strptime(assignment_due_at, '%Y-%m-%dT%H:%M:%SZ')
-
-        # If there are less than 3 days left on the assignment, set priority to 4
-        if (due_at - datetime.now()).days < 3:
-            priority = 4
-
-    return priority
-
-
-def check_existing_task(assignment, project_id):
-    """
-    Checks to see if a task already exists for the assignment.
-    Returns flags for whether the task exists and if it needs to be updated,
-    as well as the corresponding task object.
-    """
-    is_added = False
-    is_synced = True
-    item = None
-    for task in todoist_tasks:
-        task_title = make_task_title(assignment)
-        if task['content'] == task_title and task['project_id'] == project_id:
-            is_added = True
-            # Check if task is synced by comparing due dates and priority
-            if (task['due'] and task['due']['date'] != assignment['due_at']) or \
-                    task['priority'] != assignment['priority']:
-                is_synced = False
-                item = task
-                break
-    return is_added, is_synced, item
-
-
-def transfer_assignments_to_todoist():
-    """
-    Transfers over assignments from Canvas over to Todoist.
-    The method Checks to make sure the assignment has not already been transferred to prevent overlap.
-    """
-    logging.info("# Transferring assignments to Todoist...")
-
-    summary = {'added': [], 'updated': [],
-               'is-submitted': [], 'up-to-date': []}
-    for i, c_a in enumerate(assignments):
-        # Get the canvas assignment name, due date, course name, todoist project id
-        c_n = c_a['name']
-        c_d = c_a['due_at']
-        c_cn = course_ids[str(c_a['course_id'])]['name']
-        t_proj_id = todoist_project_dict[c_cn]
-
-        # Find the corresponding priority based on the assignment properties
-        priority = find_priority(c_a)
-        c_a['priority'] = priority
-
-        # Check if the assignment already exists in Todoist and if it needs updating
-        is_added, is_synced, item = check_existing_task(c_a, t_proj_id)
-        logging.info(f"  {i + 1}. Assignment: \"{c_n}\"")
-
-        # Handle cases for adding and updating tasks on Todoist
-        if not is_added:
-            if c_a['submission']['workflow_state'] == "unsubmitted":
-                add_new_task(c_a, t_proj_id)
-                summary['added'].append(c_a)
-            else:
-                logging.info(f"     INFO: Already submitted, skipping...")
-                summary['is-submitted'].append(c_a)
-        elif not is_synced:
-            update_task(c_a, item)
-            summary['updated'].append(c_a)
-        else:
-            logging.info(f"     OK: Task is already up to date!")
-            summary['up-to-date'].append(c_a)
-        logging.info(f"     Course: {c_cn}")
-        logging.info(f"     Due Date: {c_d}")
-        logging.info(f"     Priority: {get_priority_name(priority)}")
-
-    # Commit changes to Todoist
-    todoist_api.commit()
-
-    # Print out short summary
-    logging.info("")
-    logging.info(f"# Short Summary:")
-    logging.info(f"  * Added: {len(summary['added'])}")
-    logging.info(f"  * Updated: {len(summary['updated'])}")
-    logging.info(f"  * Already Submitted: {len(summary['is-submitted'])}")
-    logging.info(f"  * Up to Date: {len(summary['up-to-date'])}")
-
-    if len(summary['added']) > 0 or len(summary['updated']) > 0:
-        logging.info("New tasks added or updated. Sending notification.")
-        n_title = f"Canvas to Todoist (Total: {len(assignments)})"
-        n_msg = f"Added {len(summary['added'])} & Updated {len(summary['updated'])}.\n" \
-                               f"Completed: {len(summary['is-submitted'])} & Up-to-Date {len(summary['up-to-date'])}."
-        send_notification(n_title, n_msg)
-    else:
-        logging.info("No new tasks added or updated. Skipping notification.")
-
-    # Print detailed summary?
-    logging.info("")
-    if not skip_confirmation_prompts:
-        answer = input("Q: Print Detailed Summary? (Y/n): ")
-    else:
-        answer = "y"
-
-    if answer.lower() == 'y':
-        logging.info("")
-        logging.info(f"# Detailed Summary:")
-        for cat in reversed(summary.keys()):
-            a_list = summary[cat]
-            logging.info(f"  * {cat.upper()}: {len(a_list)}")
-            for i, c_a in enumerate(a_list):
-                c_n = c_a['name']
-                c_cn = course_ids[str(c_a['course_id'])]['name']
-                a_p = c_a['priority']
-                a_d = c_a['due_at']
-                d = None
-                if a_d:
-                    d = datetime.strptime(a_d, '%Y-%m-%dT%H:%M:%SZ')
-                # Convert to format: May 22, 2022 at 12:00 PM
-                d_nat = "Unknown" if d is None else d.strftime(
-                    '%b %d, %Y at %I:%M %p')
-                logging.info(f"    {i + 1}. \"{c_n}\"")
-                logging.info(f"         Course: {c_cn}")
-                logging.info(f"         Due Date: {d_nat}")
-                logging.info(f"         Priority: {get_priority_name(a_p)}")
-
-
-def add_new_task(c_a, t_proj_id):
-    """
-    Adds a new task from a Canvas assignment object to Todoist under the project corresponding to project_id
-    """
-    logging.info(f"     NEW: Adding new Task for assignment")
-    task_title = make_task_title(c_a)
-    c_d = c_a['due_at']
-    c_p = c_a['priority']
-    todoist_api.add_item(task_title,
-                         project_id=t_proj_id,
-                         date_string=c_d,
-                         priority=c_p)
-
-
-def update_task(c_a, t_task):
-    """
-    Updates an existing task from a Canvas assignment object to Todoist
-    """
-    updates_list = []
-    # Check if due date has changed
-    t_d = t_task['due']['date'] if t_task['due'] else None
-    c_d = c_a['due_at']
-    if t_d != c_d:
-        updates_list.append('due date')
-    # Check if priority has changed
-    t_p = t_task['priority']
-    c_p = c_a['priority']
-    # Print changes
-    if t_p != c_p:
-        updates_list.append('priority')
-    logging.info(f"     UPDATE: Updating Task: " + ", ".join(updates_list))
-    # Update Todoist task
-    t_task.update(due={
-        'date': c_d,
-    },
-        priority=c_p)
+    ct.run()
 
 
 if __name__ == "__main__":
