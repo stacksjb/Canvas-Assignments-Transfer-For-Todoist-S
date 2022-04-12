@@ -1,17 +1,17 @@
 #!/usr/bin/python3
 """
 Modifications by Andrei Cozma which are based on the original code from the following repository:
-https://github.com/scottquach/Canvas-Assignments-Transfer-For-Todoist
+- https://github.com/scottquach/Canvas-Assignments-Transfer-For-Todoist
 
 What's new:
-- Use the 'canvasapi' library instead of requests for shorter/cleaner code
-- Use the 'pick' library for better multiple-item selection
-- Added ability to rename a course as it appears as a Todoist project (can optionally use the default name from Canvas)
-- Automatically set task priority based on keywords (configurable)
-- Print short and detailed summaries after assignment transfer.
-  - Shows counts of new assignments, updated assignments, and skipped assignments (already submitted or already up to date)
-- Optional file downloading capability
-- Reformatted print statements for better verbosity and readability.
+ - Use the 'canvasapi' library instead of requests for shorter/cleaner code
+ - Use the 'pick' library for better multiple-item selection
+ - Added ability to rename a course as it appears as a Todoist project (can optionally use the default name from Canvas)
+ - Automatically set task priority based on keywords (configurable)
+ - Print short and detailed summaries after assignment transfer.
+ - Shows counts of new assignments, updated assignments, and skipped assignments (already submitted or already up to date)
+ - Optional file downloading capability
+ - Reformatted print statements for better verbosity and readability.
 
 
 Huge thanks to scottquach and stacksjb for their awesome work on this project.
@@ -50,7 +50,6 @@ logging.basicConfig(
 
 
 def main():
-
     logging.info(f"Logs saved to: {log_path}")
     logging.info("")
 
