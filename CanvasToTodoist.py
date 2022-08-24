@@ -4,7 +4,7 @@ from datetime import datetime
 from helpers.CanvasHelper import CanvasHelper
 from helpers.ConfigHelper import ConfigHelper
 from helpers.TodoistHelper import TodoistHelper
-
+from helpers.NotificationHelper import NotificationHelper
 
 class CanvasToTodoist:
 
@@ -29,7 +29,7 @@ class CanvasToTodoist:
         self.selected_course_ids = self.canvas_helper.select_courses(self.config_helper,
                                                                      todoist_project_names,
                                                                      self.skip_confirmation_prompts)
-
+        print(self.selected_course_ids)
         course_names = self.canvas_helper.get_course_names(self.selected_course_ids)
 
         self.todoist_helper.create_projects(course_names)

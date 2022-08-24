@@ -24,6 +24,7 @@ class CanvasHelper:
 
         course_names = []
         for course_obj in course_ids.values():
+            print(course_obj)
             course_names.append(course_obj['name'])
         logging.info("")
         return course_names
@@ -149,10 +150,10 @@ class CanvasHelper:
 
             course_name_new, indices = pick(options, pick_title)
 
-            if selected == "+ Create new name":
+            if course_name_new == "+ Create new name":
                 course_name_new = input("\t- Name: ")
 
-            selected_courses[course_id] = course_name_new
+            selected_courses[course_id] = {"name": course_name_new}
 
         # write course ids to self.config file
         config_helper.set('courses', selected_courses)

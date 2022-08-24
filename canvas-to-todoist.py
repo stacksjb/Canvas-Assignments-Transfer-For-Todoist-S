@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 """
 Modifications by Andrei Cozma which are based on the original code from the following repository:
 - https://github.com/scottquach/Canvas-Assignments-Transfer-For-Todoist

@@ -1,6 +1,5 @@
 from notifypy import Notify
 
-
 class NotificationHelper:
 
     @staticmethod
