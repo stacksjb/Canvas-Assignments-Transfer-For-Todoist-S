@@ -1,8 +1,12 @@
+import hashlib
 import json
 import logging
 import os
+from pprint import pprint
 import re
 from operator import itemgetter
+import sys
+from bs4 import BeautifulSoup
 
 import requests
 from canvasapi import Canvas
@@ -202,8 +206,14 @@ class CanvasDownloadHelper():
             logging.info(f" * Folder `{folder_name}` (Folders: {folders_count}, Files: {files_count})")
 
             for file in folder_files_response.json():
-                if self.download_file_handler(file, folder_path):
-                    num_files += 1
+                try:
+                    if self.download_file_handler(file['filename'], file['url'], file, folder_path):
+                        num_files += 1
+                except Exception as e:
+                    logging.info(colored(f"  - Error: {e}", "red"))
+                    logging.info(json.dumps(file, indent=4))
+                    logging.info(json.dumps(folder, indent=4))
+                    continue
 
         return num_files
 
@@ -217,11 +227,14 @@ class CanvasDownloadHelper():
             logging.info(colored(f"  - Error: {response.status_code}", "red"))
             return False
 
+        save_path = os.path.join(save_path, "course-files")
+
         num_files = 0
         for module in response.json():
             module_name = module['name']
             # Replace +, _, -, and spaces with -
             module_name = re.sub(r'[\s+_\-:]+', '-', module_name)
+            
 
             logging.info(f"  * Module: `{module_name}`")
             items_url = module['items_url']
@@ -229,48 +242,89 @@ class CanvasDownloadHelper():
 
             for item in items_url_response.json():
                 file_type = item['type']
-                if file_type != "File":
+                if file_type.lower() != "file":
+                    folder_path = os.path.join(save_path, module_name.lower())
+                else:
+                    folder_path = save_path
+                
+                # if file_type != "File":
+                if "url" not in item:
+                    logging.info(colored(f"    - {file_type} - Skipping", "yellow"))
                     continue
 
                 html_url = item['url']
                 html_url_response = requests.get(html_url, headers=self.header)
                 html_url_response_json = html_url_response.json()
-                if self.download_file_handler(html_url_response_json,
-                                              os.path.join(save_path, "course-files"),
-                                              module_name.lower()):
-                    num_files += 1
+                
+                # pprint(item)
+                # pprint(html_url_response_json)
+                try:
+                    if file_type.lower() == "file":
+                        file_name = html_url_response_json['filename']
+                        file_url = html_url_response_json['url']
+                        if self.download_file_handler(file_name, file_url, 
+                                            html_url_response_json,
+                                        folder_path,
+                                        module_name.lower()):
+                            num_files += 1
+                        continue
+                    if file_type.lower() == "page":
+                        file_name = html_url_response_json['title']
+                        body = html_url_response_json['body']
+                    elif file_type.lower() == "assignment":
+                        file_name = html_url_response_json['name']
+                        body = html_url_response_json['description']
+                    elif file_type.lower() == "quiz":
+                        file_name = html_url_response_json['title']
+                        body = html_url_response_json['description']
+                    elif file_type.lower() == "discussion":
+                        file_name = html_url_response_json['title']
+                        body = html_url_response_json['message']
+                    else:
+                        raise Exception(f"Unknown file type: {file_type}")
+                    
+                    file_name += ".html"
+                    if self.download_html_helper(file_name, body, folder_path):
+                        num_files += 1
+                except Exception as e:
+                    logging.info(colored(f"    - {file_type} - Error: {e}", "red"))
+                    logging.info(json.dumps(item, indent=4))
+                    logging.info(json.dumps(html_url_response_json, indent=4))
+                    continue
+                    
 
         return num_files
 
-    def download_file_handler(self, file_obj, folder_path, subfolder_name=None):
+    def download_file_handler(self, file_name, file_url, file_obj, folder_path, subfolder_name=None):
         os.makedirs(folder_path, exist_ok=True)
-        file_name = file_obj['filename']
         # Replace any occurance of %XX with a -
         file_name = re.sub(r'%[0-9a-fA-F][0-9a-fA-F]', '-', file_name)
         # Replace +, _, -, and spaces with -
         file_name = re.sub(r'[\s+_\-:]+', '-', file_name)
 
         file_path = os.path.join(folder_path, file_name)
+        
+        if "size" in file_obj:
+            file_size = file_obj['size']
+            file_size_mb = round(file_size / 1000000, 2)
 
-        file_url = file_obj['url']
-        file_size = file_obj['size']
-        file_size_mb = round(file_size / 1000000, 2)
+            # Download the file to folder
+            if not os.path.isfile(file_path) and subfolder_name is not None:
+                return self.download_file_handler(file_name, file_url, file_obj, os.path.join(folder_path, subfolder_name))
 
-        # Download the file to folder
-        if not os.path.isfile(file_path) and subfolder_name is not None:
-            return self.download_file_handler(file_obj, os.path.join(folder_path, subfolder_name))
+            logging.info(f"    - Downloading `{file_name}` (size: {file_size} bytes, {file_size_mb} MB)")
+            if os.path.isfile(file_path):
+                # Get size in bytes of filepath
+                existing_size = os.path.getsize(file_path)
+                if existing_size == file_size:
+                    logging.info(colored(f"      - File on disk has matching size = {existing_size}. Skipping...", "yellow"))
+                    return False
 
-        logging.info(f"    - Downloading `{file_name}` (size: {file_size} bytes, {file_size_mb} MB)")
-        if os.path.isfile(file_path):
-            # Get size in bytes of filepath
-            existing_size = os.path.getsize(file_path)
-            if existing_size == file_size:
-                logging.info(colored(f"      - File on disk has matching size = {existing_size}. Skipping...", "yellow"))
-                return False
+                logging.info(colored(f"      - File needs updating: Current Size = {existing_size} => New Size = {file_size}", "green"))
+        else:
+            logging.info(f"    - Downloading `{file_name}`")
 
-            logging.info(colored(f"      - File needs updating: Current Size = {existing_size} => New Size = {file_size}", "green"))
-
-        if file_url == '':
+        if file_url == '' and 'lock_explanation' in file_obj:
             logging.info(colored(f"      - No URL found for file. Skipping...", "red"))
             logging.info(colored(f"      - Lock explanation: {file_obj['lock_explanation']}", "red"))
 
@@ -279,10 +333,69 @@ class CanvasDownloadHelper():
 
             return False
 
-        r = requests.get(file_url, stream=True)
+        r = requests.get(file_url, stream=True, headers=self.header)
         with open(file_path, 'wb') as f:
             for chunk in r.iter_content(chunk_size=1024):
                 if chunk:
                     f.write(chunk)
+
+        return True
+    
+    def download_html_helper(self, file_name, body, folder_path):
+        os.makedirs(folder_path, exist_ok=True)
+        # Replace any occurance of %XX with a -
+        file_name = re.sub(r'%[0-9a-fA-F][0-9a-fA-F]', '-', file_name)
+        # Replace +, _, -, and spaces with -
+        file_name = re.sub(r'[\s+_\-:]+', '-', file_name)
+
+        file_path = os.path.join(folder_path, file_name)
+        
+        logging.info(colored(f"    - Downloading `{file_name}`", "green"))
+        
+        # Use beautiful soup to parse the html and download any images and files
+        soup = BeautifulSoup(body, 'html.parser')
+        for img in soup.find_all('img'):
+            if 'src' in img.attrs:
+                img_url = img.attrs['src']
+                if img_url.startswith('http'):
+                    # create a hash of the url to use as the filename
+                    img_name = hashlib.md5(img_url.encode('utf-8')).hexdigest()
+                    # save to res folder
+                    img_path = os.path.join(folder_path, 'img', img_name)
+                    if not os.path.isfile(img_path):
+                        logging.info(colored(f"      - Downloading image `{img_name}`", "green"))
+                        r = requests.get(img_url, stream=True, headers=self.header)
+                        with open(img_path, 'wb') as f:
+                            for chunk in r.iter_content(chunk_size=1024):
+                                if chunk:
+                                    f.write(chunk)
+                    else:
+                        logging.info(colored(f"      - Image `{img_name}` already exists. Skipping...", "yellow"))                
+                    img.attrs['src'] = img_name
+                    
+        for a in soup.find_all('a'):
+            if 'href' in a.attrs:
+                a_url = a.attrs['href']
+                if a_url.startswith('http'):
+                    # create a hash of the url to use as the filename
+                    a_name = hashlib.md5(a_url.encode('utf-8')).hexdigest()
+                    # save to res folder
+                    a_path = os.path.join(folder_path, 'files', a_name)
+                    if not os.path.isfile(a_path):
+                        logging.info(colored(f"      - Downloading file `{a_name}`", "green"))
+                        r = requests.get(a_url, stream=True, headers=self.header)
+                        with open(a_path, 'wb') as f:
+                            for chunk in r.iter_content(chunk_size=1024):
+                                if chunk:
+                                    f.write(chunk)
+                    else:
+                        logging.info(colored(f"      - File `{a_name}` already exists. Skipping...", "yellow"))                
+                    a.attrs['href'] = a_name
+                    
+        with open(file_path, 'w') as f:
+            f.write(str(soup))
+                    
+        # with open(file_path, 'w') as f:
+        #     f.write(body)
 
         return True
