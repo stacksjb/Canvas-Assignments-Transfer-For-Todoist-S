@@ -382,46 +382,7 @@ class CanvasDownloadHelper():
                     else:
                         logging.info(colored(f"       - Skipping image {i+1}/{len_all_imgs}: {img_url}", "yellow"))             
                     img.attrs['src'] = f'./img/{img_name}'
-            # if "data-api-endpoint" in img.attrs:
-            #     img_url = img.attrs['data-api-endpoint']
-            #     if img_url.startswith('http'):
-            #         # create a hash of the url to use as the filename
-            #         img_name = hashlib.md5(img_url.encode('utf-8')).hexdigest()
-            #         # save to res folder
-            #         img_path = os.path.join(folder_res, img_name)
-            #         if not os.path.isfile(img_path):
-            #             logging.info(colored(f"      - Downloading image `{img_name}`", "green"))
-            #             r = requests.get(img_url, stream=True, headers=self.header)
-            #             with open(img_path, 'wb') as f:
-            #                 for chunk in r.iter_content(chunk_size=1024):
-            #                     if chunk:
-            #                         f.write(chunk)
-            #         else:
-            #             logging.info(colored(f"      - Image `{img_name}` already exists. Skipping...", "yellow"))
-            #         img.attrs['src'] = f'./res/{img_name}'
-                    
-        # all_a = soup.find_all('a')
-        # len_all_a = len(all_a) if all_a is not None else 0
-        # for i, a in enumerate(all_a):
-        #     if 'href' in a.attrs:
-        #         print(a)
-        #         a_url = a.attrs['href']
-        #         if a_url.startswith('http'):
-        #             # create a hash of the url to use as the filename
-        #             a_name = hashlib.md5(a_url.encode('utf-8')).hexdigest()
-        #             # save to res folder
-        #             a_path = os.path.join(folder_res, a_name)
-        #             if not os.path.isfile(a_path):
-        #                 logging.info(colored(f"       - Downloading file {i+1}/{len_all_a}: {a_url}", "green"))
-        #                 r = requests.get(a_url, stream=True, headers=self.header)
-        #                 with open(a_path, 'wb') as f:
-        #                     for chunk in r.iter_content(chunk_size=1024):
-        #                         if chunk:
-        #                             f.write(chunk)
-        #             else:
-        #                 logging.info(colored(f"       - Skipping file {i+1}/{len_all_a}: {a_url}", "yellow"))           
-        #             a.attrs['href'] = f'./res/{a_name}'
-                    
+
         with open(file_path, 'w') as f:
             f.write(str(soup))
 
