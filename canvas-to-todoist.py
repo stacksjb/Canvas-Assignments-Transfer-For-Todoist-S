@@ -66,8 +66,8 @@ def main():
 
     config_path = os.path.join(os_config_path, "config.json")
 
-    ct = CanvasToTodoist(config_path, skip_confirmation_prompts)
-    ct.run()
+    # ct = CanvasToTodoist(config_path, skip_confirmation_prompts)
+    # ct.run()
 
     cd = CanvasFileDownloader(config_path, os_save_path, skip_confirmation_prompts)
     cd.run()

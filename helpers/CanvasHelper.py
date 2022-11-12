@@ -7,6 +7,7 @@ from operator import itemgetter
 import requests
 from canvasapi import Canvas
 from pick import pick
+from termcolor import colored
 
 
 class CanvasHelper:
@@ -172,6 +173,7 @@ class CanvasDownloadHelper():
                                 str(course_id) + '/folders', headers=self.header,
                                 params=param)
         if response.status_code != 200:
+            logging.info(colored(f"  - Error: {response.status_code}", "red"))
             return False
 
         num_files = 0
@@ -191,8 +193,8 @@ class CanvasDownloadHelper():
                 json.dump(folder_files_response.json(), f, indent=4)
 
             if folder_files_response.status_code != 200:
-                logging.info(f"  * Folder: `{folder_name}` => "
-                             f"{folder_files_response.status_code} - {folder_files_response.reason}")
+                logging.info(colored(f"  * Folder: `{folder_name}` => "
+                             f"{folder_files_response.status_code} - {folder_files_response.reason}", "red"))
                 continue
 
             folders_count = folder['folders_count']
@@ -209,9 +211,10 @@ class CanvasDownloadHelper():
         if param is None:
             param = {}
         response = requests.get(self.canvas_api_heading + '/api/v1/courses/' +
-                                str(course_id) + '/helpers', headers=self.header,
+                                str(course_id) + '/modules', headers=self.header,
                                 params=param)
         if response.status_code != 200:
+            logging.info(colored(f"  - Error: {response.status_code}", "red"))
             return False
 
         num_files = 0
@@ -262,14 +265,14 @@ class CanvasDownloadHelper():
             # Get size in bytes of filepath
             existing_size = os.path.getsize(file_path)
             if existing_size == file_size:
-                logging.info(f"      - File on disk has matching size = {existing_size}. Skipping...")
+                logging.info(colored(f"      - File on disk has matching size = {existing_size}. Skipping...", "yellow"))
                 return False
 
-            logging.info(f"      - File needs updating: Current Size = {existing_size} => New Size = {file_size}")
+            logging.info(colored(f"      - File needs updating: Current Size = {existing_size} => New Size = {file_size}", "green"))
 
         if file_url == '':
-            logging.info(f"      - No URL found for file. Skipping...")
-            logging.info(f"      - Lock explanation: {file_obj['lock_explanation']}")
+            logging.info(colored(f"      - No URL found for file. Skipping...", "red"))
+            logging.info(colored(f"      - Lock explanation: {file_obj['lock_explanation']}", "red"))
 
             with open(f'{file_path}-locked.json', 'w') as f:
                 json.dump(file_obj, f, indent=4)
