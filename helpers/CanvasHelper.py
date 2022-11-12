@@ -16,11 +16,11 @@ from termcolor import colored
 
 class CanvasHelper:
 
-    def __init__(self, api_key, canvas_api_heading="https://canvas.instructure.com"):
+    def __init__(self, api_key, canvas_api_heading: str="https://canvas.instructure.com"):
         self.api_key = api_key
         self.canvas_api_heading = canvas_api_heading
         self.header = {"Authorization": f"Bearer {api_key.strip()}"}
-        self.download_helper = CanvasDownloadHelper(api_key)
+        self.download_helper = CanvasDownloadHelper(api_key, canvas_api_heading)
         self.courses_id_name_dict = {}
 
     @staticmethod
@@ -220,6 +220,8 @@ class CanvasDownloadHelper():
     def download_module_files(self, course_id, save_path, param=None):
         if param is None:
             param = {}
+            
+        print(self.canvas_api_heading)
         response = requests.get(self.canvas_api_heading + '/api/v1/courses/' +
                                 str(course_id) + '/modules', headers=self.header,
                                 params=param)
@@ -312,15 +314,15 @@ class CanvasDownloadHelper():
             if not os.path.isfile(file_path) and subfolder_name is not None:
                 return self.download_file_handler(file_name, file_url, file_obj, os.path.join(folder_path, subfolder_name))
 
-            logging.info(f"    - Downloading `{file_name}` (size: {file_size} bytes, {file_size_mb} MB)")
             if os.path.isfile(file_path):
                 # Get size in bytes of filepath
                 existing_size = os.path.getsize(file_path)
                 if existing_size == file_size:
-                    logging.info(colored(f"      - File on disk has matching size = {existing_size}. Skipping...", "yellow"))
+                    logging.info(colored(f"    - Skipping `{file_name}` (size: {file_size} bytes, existing_size: {existing_size} bytes)", "yellow"))
                     return False
-
-                logging.info(colored(f"      - File needs updating: Current Size = {existing_size} => New Size = {file_size}", "green"))
+                logging.info(colored(f"    - Updating `{file_name}` (current size: {existing_size} bytes, new size: {file_size} bytes)", "green"))
+            else:
+                logging.info(f"    - Downloading `{file_name}` (size: {file_size} bytes, {file_size_mb} MB)")
         else:
             logging.info(f"    - Downloading `{file_name}`")
 
@@ -359,7 +361,9 @@ class CanvasDownloadHelper():
         
         # Use beautiful soup to parse the html and download any images and files
         soup = BeautifulSoup(body, 'html.parser')
-        for img in soup.find_all('img'):
+        all_imgs = soup.find_all('img')
+        for i, img in enumerate(all_imgs):
+            # pprint(img)
             if 'src' in img.attrs:
                 img_url = img.attrs['src']
                 if img_url.startswith('http'):
@@ -368,18 +372,37 @@ class CanvasDownloadHelper():
                     # save to res folder
                     img_path = os.path.join(folder_img, img_name)
                     if not os.path.isfile(img_path):
-                        logging.info(colored(f"      - Downloading image `{img_name}`", "green"))
+                        logging.info(colored(f"       - Downloading image {i+1}/{len(all_imgs)}: {img_url}", "green"))
                         r = requests.get(img_url, stream=True, headers=self.header)
                         with open(img_path, 'wb') as f:
                             for chunk in r.iter_content(chunk_size=1024):
                                 if chunk:
                                     f.write(chunk)
                     else:
-                        logging.info(colored(f"      - Image `{img_name}` already exists. Skipping...", "yellow"))                
+                        logging.info(colored(f"       - Skipping image {i+1}/{len(all_imgs)}: {img_url}", "yellow"))             
                     img.attrs['src'] = f'./img/{img_name}'
+            # if "data-api-endpoint" in img.attrs:
+            #     img_url = img.attrs['data-api-endpoint']
+            #     if img_url.startswith('http'):
+            #         # create a hash of the url to use as the filename
+            #         img_name = hashlib.md5(img_url.encode('utf-8')).hexdigest()
+            #         # save to res folder
+            #         img_path = os.path.join(folder_res, img_name)
+            #         if not os.path.isfile(img_path):
+            #             logging.info(colored(f"      - Downloading image `{img_name}`", "green"))
+            #             r = requests.get(img_url, stream=True, headers=self.header)
+            #             with open(img_path, 'wb') as f:
+            #                 for chunk in r.iter_content(chunk_size=1024):
+            #                     if chunk:
+            #                         f.write(chunk)
+            #         else:
+            #             logging.info(colored(f"      - Image `{img_name}` already exists. Skipping...", "yellow"))
+            #         img.attrs['src'] = f'./res/{img_name}'
                     
-        for a in soup.find_all('a'):
+        all_a = soup.find_all('a')
+        for i, a in enumerate(all_a):
             if 'href' in a.attrs:
+                print(a)
                 a_url = a.attrs['href']
                 if a_url.startswith('http'):
                     # create a hash of the url to use as the filename
@@ -387,14 +410,15 @@ class CanvasDownloadHelper():
                     # save to res folder
                     a_path = os.path.join(folder_res, a_name)
                     if not os.path.isfile(a_path):
-                        logging.info(colored(f"      - Downloading file `{a_name}`", "green"))
+                        logging.info(colored(f"       - Downloading file {i+1}/{len(all_a)}: {a_url}", "green"))
                         r = requests.get(a_url, stream=True, headers=self.header)
+                        pprint(r.json())
                         with open(a_path, 'wb') as f:
                             for chunk in r.iter_content(chunk_size=1024):
                                 if chunk:
                                     f.write(chunk)
                     else:
-                        logging.info(colored(f"      - File `{a_name}` already exists. Skipping...", "yellow"))                
+                        logging.info(colored(f"       - Skipping file {i+1}/{len(all_a)}: {a_url}", "yellow"))           
                     a.attrs['href'] = f'./res/{a_name}'
                     
         with open(file_path, 'w') as f:

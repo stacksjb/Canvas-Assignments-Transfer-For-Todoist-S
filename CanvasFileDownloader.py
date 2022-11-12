@@ -15,8 +15,8 @@ class CanvasFileDownloader:
         self.param = {'per_page': '100', 'include': 'submission'}
 
         self.config_helper = ConfigHelper(config_path, self.input_prompt, skip_confirmation_prompts)
-
-        self.canvas_helper = CanvasHelper(self.config_helper.get('canvas_api_key'))
+        heading = str(self.config_helper.get('canvas_api_heading'))
+        self.canvas_helper = CanvasHelper(self.config_helper.get('canvas_api_key'), canvas_api_heading=heading)
         self.selected_course_ids = self.canvas_helper.select_courses(self.config_helper,
                                                                      skip_confirmation_prompts=skip_confirmation_prompts)
 
@@ -35,12 +35,15 @@ class CanvasFileDownloader:
             self.load_save_paths()
             num_courses, num_files_total = self.canvas_helper.download_course_files_all(self.selected_course_ids,
                                                                                         self.param)
-            NotificationHelper.send_notification("Canvas Files",
-                                                 f"Downloaded {num_files_total} files for {num_courses} courses")
+            if num_courses > 0 and num_files_total > 0:
+                NotificationHelper.send_notification("Canvas Files",
+                                                    f"Downloaded {num_files_total} files for {num_courses} courses")
             num_courses, num_files_total = self.canvas_helper.download_module_files_all(self.selected_course_ids,
                                                                                         self.param)
-            NotificationHelper.send_notification("Canvas Module Files",
-                                                 f"Downloaded {num_files_total} files for {num_courses} course modules.")
+
+            if num_courses > 0 and num_files_total > 0:
+                NotificationHelper.send_notification("Canvas Modules",
+                                                    f"Downloaded {num_files_total} files for {num_courses} courses")
 
     def load_save_paths(self):
         has_missing = False
