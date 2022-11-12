@@ -347,8 +347,12 @@ class CanvasDownloadHelper():
         file_name = re.sub(r'%[0-9a-fA-F][0-9a-fA-F]', '-', file_name)
         # Replace +, _, -, and spaces with -
         file_name = re.sub(r'[\s+_\-:]+', '-', file_name)
-
         file_path = os.path.join(folder_path, file_name)
+        
+        folder_img = os.path.join(folder_path, "img")
+        folder_res = os.path.join(folder_path, "res")
+        os.makedirs(folder_img, exist_ok=True)
+        os.makedirs(folder_res, exist_ok=True)
         
         logging.info(colored(f"    - Downloading `{file_name}`", "green"))
         
@@ -361,7 +365,7 @@ class CanvasDownloadHelper():
                     # create a hash of the url to use as the filename
                     img_name = hashlib.md5(img_url.encode('utf-8')).hexdigest()
                     # save to res folder
-                    img_path = os.path.join(folder_path, 'img', img_name)
+                    img_path = os.path.join(folder_img, img_name)
                     if not os.path.isfile(img_path):
                         logging.info(colored(f"      - Downloading image `{img_name}`", "green"))
                         r = requests.get(img_url, stream=True, headers=self.header)
@@ -371,7 +375,7 @@ class CanvasDownloadHelper():
                                     f.write(chunk)
                     else:
                         logging.info(colored(f"      - Image `{img_name}` already exists. Skipping...", "yellow"))                
-                    img.attrs['src'] = img_name
+                    img.attrs['src'] = f'img/{img_name}'
                     
         for a in soup.find_all('a'):
             if 'href' in a.attrs:
@@ -380,7 +384,7 @@ class CanvasDownloadHelper():
                     # create a hash of the url to use as the filename
                     a_name = hashlib.md5(a_url.encode('utf-8')).hexdigest()
                     # save to res folder
-                    a_path = os.path.join(folder_path, 'files', a_name)
+                    a_path = os.path.join(folder_res, a_name)
                     if not os.path.isfile(a_path):
                         logging.info(colored(f"      - Downloading file `{a_name}`", "green"))
                         r = requests.get(a_url, stream=True, headers=self.header)
@@ -390,7 +394,7 @@ class CanvasDownloadHelper():
                                     f.write(chunk)
                     else:
                         logging.info(colored(f"      - File `{a_name}` already exists. Skipping...", "yellow"))                
-                    a.attrs['href'] = a_name
+                    a.attrs['href'] = f'res/{a_name}'
                     
         with open(file_path, 'w') as f:
             f.write(str(soup))
