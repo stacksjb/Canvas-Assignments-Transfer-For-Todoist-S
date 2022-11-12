@@ -3,3 +3,4 @@ todoist-python>=8.1.3
 notifypy>=1.0.3.0
 canvasapi>=2.2.0
 pick>=1.2.0
+notifypy>=0.3.3
