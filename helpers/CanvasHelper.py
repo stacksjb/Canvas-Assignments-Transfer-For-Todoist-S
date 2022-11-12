@@ -184,7 +184,7 @@ class CanvasDownloadHelper():
         for folder in response.json():
             folder_name = folder['full_name']
             # Replace +, _, -, and spaces with -
-            folder_name = re.sub(r'[\s+_\-:]+', '-', folder_name)
+            folder_name = re.sub(r'[\s+_\-:\.]+', '-', folder_name)
 
             folder_path = os.path.join(save_path, folder_name.lower())
             os.makedirs(folder_path, exist_ok=True)
@@ -207,7 +207,7 @@ class CanvasDownloadHelper():
 
             for file in folder_files_response.json():
                 try:
-                    if self.download_file_handler(file['filename'], file['url'], file, folder_path):
+                    if self.download_file_handler(file['display_name'], file['url'], file, folder_path):
                         num_files += 1
                 except Exception as e:
                     logging.info(colored(f"  - Error: {e}", "red"))
@@ -233,7 +233,7 @@ class CanvasDownloadHelper():
         for module in response.json():
             module_name = module['name']
             # Replace +, _, -, and spaces with -
-            module_name = re.sub(r'[\s+_\-:]+', '-', module_name)
+            module_name = re.sub(r'[\s+_\-:\.]+', '-', module_name)
             
 
             logging.info(f"  * Module: `{module_name}`")
@@ -260,7 +260,7 @@ class CanvasDownloadHelper():
                 # pprint(html_url_response_json)
                 try:
                     if file_type.lower() == "file":
-                        file_name = html_url_response_json['filename']
+                        file_name = html_url_response_json['display_name']
                         file_url = html_url_response_json['url']
                         if self.download_file_handler(file_name, file_url, 
                                             html_url_response_json,
@@ -283,7 +283,6 @@ class CanvasDownloadHelper():
                     else:
                         raise Exception(f"Unknown file type: {file_type}")
                     
-                    file_name += ".html"
                     if self.download_html_helper(file_name, body, folder_path):
                         num_files += 1
                 except Exception as e:
@@ -300,8 +299,9 @@ class CanvasDownloadHelper():
         # Replace any occurance of %XX with a -
         file_name = re.sub(r'%[0-9a-fA-F][0-9a-fA-F]', '-', file_name)
         # Replace +, _, -, and spaces with -
-        file_name = re.sub(r'[\s+_\-:]+', '-', file_name)
-
+        fnsplit = file_name.split('.')
+        fnsplit[0] = re.sub(r'[\s+_\-:\.]+', '-', fnsplit[0])
+        file_name = '.'.join(fnsplit)
         file_path = os.path.join(folder_path, file_name)
         
         if "size" in file_obj:
@@ -346,7 +346,8 @@ class CanvasDownloadHelper():
         # Replace any occurance of %XX with a -
         file_name = re.sub(r'%[0-9a-fA-F][0-9a-fA-F]', '-', file_name)
         # Replace +, _, -, and spaces with -
-        file_name = re.sub(r'[\s+_\-:]+', '-', file_name)
+        file_name = re.sub(r'[\s+_\-:\.]+', '-', file_name)
+        file_name = file_name + ".html"
         file_path = os.path.join(folder_path, file_name)
         
         folder_img = os.path.join(folder_path, "img")
@@ -375,7 +376,7 @@ class CanvasDownloadHelper():
                                     f.write(chunk)
                     else:
                         logging.info(colored(f"      - Image `{img_name}` already exists. Skipping...", "yellow"))                
-                    img.attrs['src'] = f'img/{img_name}'
+                    img.attrs['src'] = f'./img/{img_name}'
                     
         for a in soup.find_all('a'):
             if 'href' in a.attrs:
@@ -394,12 +395,9 @@ class CanvasDownloadHelper():
                                     f.write(chunk)
                     else:
                         logging.info(colored(f"      - File `{a_name}` already exists. Skipping...", "yellow"))                
-                    a.attrs['href'] = f'res/{a_name}'
+                    a.attrs['href'] = f'./res/{a_name}'
                     
         with open(file_path, 'w') as f:
             f.write(str(soup))
-                    
-        # with open(file_path, 'w') as f:
-        #     f.write(body)
 
         return True
