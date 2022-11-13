@@ -224,7 +224,7 @@ class CanvasDownloadHelper:
             # Replace +, _, -, and spaces with -
             module_name = re.sub(r"[\s+_\-:\.]+", "-", module_name)
 
-            logging.info(f"  * Module: `{module_name}`")
+            logging.info(f" * Module: `{module_name}`")
             items_url = module["items_url"]
             items_url_response = requests.get(items_url, headers=self.header, params=param)
 
@@ -297,16 +297,16 @@ class CanvasDownloadHelper:
                 # Get size in bytes of filepath
                 existing_size = os.path.getsize(file_path)
                 if existing_size == file_size:
-                    logging.info(
-                            colored(f"    - Skipping `{file_name}` (size: {file_size} bytes, existing_size: {existing_size} bytes)",
-                                    "yellow"))
+                    logging.info(colored(
+                        f"    - Skipping `{file_name}` (size: {file_size} bytes, existing_size: {existing_size} bytes)",
+                        "yellow"))
                     return False
-                logging.info(
-                        colored(f"    - Updating `{file_name}` (current size: {existing_size} bytes, new size: {file_size} bytes)",
-                                "green"))
+                logging.info(colored(
+                    f"    - Updating `{file_name}` (current size: {existing_size} bytes, new size: {file_size} bytes)",
+                    "green"))
             else:
-                logging.info(
-                    colored(f"    - Downloading `{file_name}` (size: {file_size} bytes, {file_size_mb} MB)", "green"))
+                logging.info(colored(f"    - Downloading `{file_name}` (size: {file_size} bytes, {file_size_mb} MB)",
+                                     "green"))
         else:
             logging.info(colored(f"    - Downloading `{file_name}`", "green"))
 
@@ -367,14 +367,14 @@ class CanvasDownloadHelper:
             existing_size = os.path.getsize(file_path)
             curr_size = len(soup.prettify().encode('utf-8'))
             if existing_size == curr_size:
-                logging.info(colored(
-                    f"       => Skipping `{file_name}` (size: {curr_size} bytes, existing_size: {existing_size} bytes)",
-                    "yellow"))
+                logging.info(
+                        colored(f"       => Skipping `{file_name}` (size: {curr_size} bytes, existing_size: {existing_size} bytes)",
+                                "yellow"))
                 return False
             else:
-                logging.info(colored(
-                    f"       => Updating `{file_name}` (current size: {existing_size} bytes, new size: {curr_size} bytes)",
-                    "green"))
+                logging.info(
+                        colored(f"       => Updating `{file_name}` (current size: {existing_size} bytes, new size: {curr_size} bytes)",
+                                "green"))
         else:
             logging.info(colored(f"       => Downloading `{file_name}`", "green"))
 
