@@ -2,8 +2,8 @@ import logging
 import os
 import sys
 
-from helpers.CanvasHelper import CanvasHelper
-from helpers.ConfigHelper import ConfigHelper
+from src.CanvasHelper import CanvasHelper
+from src.ConfigHelper import ConfigHelper
 
 
 class CanvasFileDownloader:

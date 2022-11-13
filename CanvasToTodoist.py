@@ -1,10 +1,11 @@
 import logging
 from datetime import datetime
 
-from helpers.CanvasHelper import CanvasHelper
-from helpers.ConfigHelper import ConfigHelper
-from helpers.TodoistHelper import TodoistHelper
-from helpers.NotificationHelper import NotificationHelper
+from src.CanvasHelper import CanvasHelper
+from src.ConfigHelper import ConfigHelper
+from src.NotificationHelper import NotificationHelper
+from src.TodoistHelper import TodoistHelper
+
 
 class CanvasToTodoist:
 
@@ -26,8 +27,7 @@ class CanvasToTodoist:
         logging.info("###################################################")
 
         todoist_project_names = self.todoist_helper.get_project_names()
-        self.selected_course_ids = self.canvas_helper.select_courses(self.config_helper,
-                                                                     todoist_project_names,
+        self.selected_course_ids = self.canvas_helper.select_courses(self.config_helper, todoist_project_names,
                                                                      self.skip_confirmation_prompts)
         print(self.selected_course_ids)
         course_names = self.canvas_helper.get_course_names(self.selected_course_ids)
@@ -53,8 +53,8 @@ class CanvasToTodoist:
             if task['content'] == task_title and task['project_id'] == project_id:
                 is_added = True
                 # Check if the task is synced by comparing due dates and priority
-                if (task['due'] and task['due']['date'] != assignment['due_at']) or \
-                        task['priority'] != assignment['priority']:
+                if (task['due'] and task['due']['date'] != assignment['due_at']) or task['priority'] != assignment[
+                    'priority']:
                     is_synced = False
                     item = task
                     break
@@ -67,8 +67,7 @@ class CanvasToTodoist:
         """
         logging.info("# Transferring assignments to Todoist...")
 
-        summary = {'added': [], 'updated': [],
-                   'is-submitted': [], 'up-to-date': []}
+        summary = {'added': [], 'updated': [], 'is-submitted': [], 'up-to-date': []}
 
         for i, c_a in enumerate(assignments):
             # Get the canvas assignment name, due date, course name, todoist project id
@@ -145,8 +144,7 @@ class CanvasToTodoist:
                     if a_d:
                         d = datetime.strptime(a_d, '%Y-%m-%dT%H:%M:%SZ')
                     # Convert to format: May 22, 2022 at 12:00 PM
-                    d_nat = "Unknown" if d is None else d.strftime(
-                        '%b %d, %Y at %I:%M %p')
+                    d_nat = "Unknown" if d is None else d.strftime('%b %d, %Y at %I:%M %p')
                     logging.info(f"    {i + 1}. \"{c_n}\"")
                     logging.info(f"         Course: {c_cn}")
                     logging.info(f"         Due Date: {d_nat}")
@@ -171,7 +169,4 @@ class CanvasToTodoist:
             updates_list.append('priority')
         logging.info(f"     UPDATE: Updating Task: " + ", ".join(updates_list))
         # Update Todoist task
-        t_task.update(due={
-            'date': c_d,
-        },
-            priority=c_p)
+        t_task.update(due={'date': c_d, }, priority=c_p)
