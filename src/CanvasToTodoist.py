@@ -1,22 +1,25 @@
 import logging
 from datetime import datetime
 
-from src.CanvasHelper import CanvasHelper
-from src.ConfigHelper import ConfigHelper
-from src.NotificationHelper import NotificationHelper
-from src.TodoistHelper import TodoistHelper
+from termcolor import colored
+
+from src.helpers.CanvasHelper import CanvasHelper
+from src.helpers.ConfigHelper import ConfigHelper
+from src.helpers.NotificationHelper import NotificationHelper
+from src.helpers.TodoistHelper import TodoistHelper
 
 
 class CanvasToTodoist:
 
-    def __init__(self, config_path, skip_confirmation_prompts=False):
+    def __init__(self, args, config_path, skip_confirmation_prompts=False):
+        logging.info(colored("Starting CanvasToTodoistr", attrs=['bold', 'reverse']))
         self.skip_confirmation_prompts = skip_confirmation_prompts
         self.param = {'per_page': '100', 'include': 'submission'}
         self.input_prompt = "> "
         self.selected_course_ids = None
 
         # Loaded configuration files
-        self.config_helper = ConfigHelper(config_path, self.input_prompt, self.skip_confirmation_prompts)
+        self.config_helper = ConfigHelper(args, config_path, self.input_prompt, self.skip_confirmation_prompts)
 
         self.canvas_helper = CanvasHelper(self.config_helper.get('canvas_api_key'))
         self.todoist_helper = TodoistHelper(self.config_helper.get('todoist_api_key'))
@@ -29,7 +32,7 @@ class CanvasToTodoist:
         todoist_project_names = self.todoist_helper.get_project_names()
         self.selected_course_ids = self.canvas_helper.select_courses(self.config_helper, todoist_project_names,
                                                                      self.skip_confirmation_prompts)
-        print(self.selected_course_ids)
+        logging.info(self.selected_course_ids)
         course_names = self.canvas_helper.get_course_names(self.selected_course_ids)
 
         self.todoist_helper.create_projects(course_names)

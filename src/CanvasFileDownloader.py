@@ -2,18 +2,21 @@ import logging
 import os
 import sys
 
-from src.CanvasHelper import CanvasHelper
-from src.ConfigHelper import ConfigHelper
+from termcolor import colored
+
+from src.helpers.CanvasHelper import CanvasHelper
+from src.helpers.ConfigHelper import ConfigHelper
 
 
 class CanvasFileDownloader:
-    def __init__(self, config_path, default_save_path, skip_confirmation_prompts=False):
+    def __init__(self, args, config_path, default_save_path, skip_confirmation_prompts=False):
+        logging.info(colored("# Starting CanvasFileDownloader", attrs=["bold", "reverse"]))
         self.default_save_path = default_save_path
         self.input_prompt = "> "
         self.skip_confirmation_prompts = skip_confirmation_prompts
         self.param = {'per_page': '100', 'include': 'submission'}
 
-        self.config_helper = ConfigHelper(config_path, self.input_prompt, skip_confirmation_prompts)
+        self.config_helper = ConfigHelper(args, config_path, self.input_prompt, skip_confirmation_prompts)
         heading = str(self.config_helper.get('canvas_api_heading'))
         self.canvas_helper = CanvasHelper(self.config_helper.get('canvas_api_key'), canvas_api_heading=heading)
         self.selected_course_ids = self.canvas_helper.select_courses(self.config_helper,

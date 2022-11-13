@@ -15,8 +15,8 @@ What's new:
 
 import logging
 
-from CanvasFileDownloader import CanvasFileDownloader
-from CanvasToTodoist import CanvasToTodoist
+from src.CanvasFileDownloader import CanvasFileDownloader
+from src.CanvasToTodoist import CanvasToTodoist
 from src.Utils import parse_args, setup
 
 os_save_path, config_path, log_path = setup()
@@ -38,11 +38,12 @@ def main():
     if skip_confirmation_prompts:
         logging.info("Skipping confirmation prompts")
 
-    ct = CanvasToTodoist(config_path, skip_confirmation_prompts)
-    ct.run()
-
-    cd = CanvasFileDownloader(config_path, os_save_path, skip_confirmation_prompts)
-    cd.run()
+    if args.todoist or args.all:
+        CanvasToTodoist(args, config_path, skip_confirmation_prompts).run()
+        logging.info("")
+    if args.files or args.all:
+        CanvasFileDownloader(args, config_path, os_save_path, skip_confirmation_prompts).run()
+        logging.info("")
 
 
 if __name__ == "__main__":

@@ -8,12 +8,14 @@ import requests
 from bs4 import BeautifulSoup
 from termcolor import colored
 
+from src.Utils import normalize_file_name, p_info
+
 
 class CanvasDownloadHelper:
     def __init__(self, api_key, canvas_api_heading="https://canvas.instructure.com"):
         self.canvas_api_heading = canvas_api_heading
         self.header = {"Authorization": f"Bearer {api_key.strip()}"}
-        logging.info("# CanvasDownloadHelper: initialized")
+        p_info("# CanvasDownloadHelper: initialized")
         logging.info(f"  - Canvas API Heading: {self.canvas_api_heading}")
         logging.info(f"  - Header: {self.header}")
 
@@ -140,7 +142,7 @@ class CanvasDownloadHelper:
 
     def download_file_handler(self, file_name, file_url, file_obj, folder_path, subfolder_name=None):
         os.makedirs(folder_path, exist_ok=True)
-        file_name = self.normalize_file_name(file_name)
+        file_name = normalize_file_name(file_name)
         file_path = os.path.join(folder_path, file_name)
 
         if "size" in file_obj:
@@ -188,7 +190,7 @@ class CanvasDownloadHelper:
 
     def download_html_helper(self, file_name, body, folder_path):
         os.makedirs(folder_path, exist_ok=True)
-        file_name = self.normalize_file_name(f"{file_name}.html")
+        file_name = normalize_file_name(f"{file_name}.html")
         file_path = os.path.join(folder_path, file_name)
 
         logging.info(f"    - `{file_name}`")
@@ -241,15 +243,3 @@ class CanvasDownloadHelper:
             f.write(soup.prettify())
 
         return True
-
-    def normalize_file_name(self, file_name):
-        # Replace any occurance of %XX with a -
-        file_name = re.sub(r"%[0-9a-fA-F][0-9a-fA-F]", "-", file_name)
-        # Replace +, _, -, and spaces with -
-        fnsplit = file_name.split(".")
-        name, ext = fnsplit[0:-1], fnsplit[-1]
-        name = "-".join(name)
-        name = re.sub(r"[\s+_\-:]+", "-", name)
-        name = name.strip("-")
-        file_name = f"{name}.{ext}"
-        return file_name
