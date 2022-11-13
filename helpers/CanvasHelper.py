@@ -19,6 +19,9 @@ class CanvasHelper:
         self.api_key = api_key
         self.canvas_api_heading = canvas_api_heading
         self.header = {"Authorization": f"Bearer {api_key.strip()}"}
+        logging.info("# CanvasHelper: Initialized")
+        logging.info(f"  - Canvas API Heading: {self.canvas_api_heading}")
+        logging.info(f"  - Header: {self.header}")
         self.download_helper = CanvasDownloadHelper(api_key, canvas_api_heading)
         self.courses_id_name_dict = {}
 
@@ -51,29 +54,29 @@ class CanvasHelper:
         return assignments
 
     def download_course_files_all(self, course_ids, param):
-        logging.info("# Downloading Folders & Files")
+        logging.info(colored("# Downloading Folders & Files", attrs=["bold", "reverse"]))
         for course_id, c_obj in course_ids.items():
             c_name = c_obj["name"]
-            logging.info(f"# Course: {c_name}")
+            logging.info(colored(f"# Course: {c_name} - Files", attrs=["bold"]))
             save_path = c_obj["save_path"]
             num_files = self.download_helper.download_course_files(course_id, save_path, param)
             logging.info(f"# Course: {c_name} - Files - Downloaded {num_files} files")
             if num_files > 0:
                 NotificationHelper.send_notification(f"{c_name} - Files", f"Downloaded {num_files} files")
-        logging.info("")
+            logging.info("")
 
     def download_module_files_all(self, course_ids, param):
-        logging.info("# Downloading Any Additional Files in Modules")
+        logging.info(colored("# Downloading Any Additional Files in Modules", attrs=["bold", "reverse"]))
 
         for course_id, c_obj in course_ids.items():
             c_name = c_obj["name"]
-            logging.info(f"# Course: {c_name}")
+            logging.info(colored(f"# Course: {c_name} - Modules", attrs=["bold"]))
             save_path = c_obj["save_path"]
             num_files = self.download_helper.download_module_files(course_id, save_path, param)
             logging.info(f"# Course: {c_name} - Modules - Downloaded {num_files} files")
             if num_files > 0:
                 NotificationHelper.send_notification(f"{c_name} - Modules", f"Downloaded {num_files} files")
-        logging.info("")
+            logging.info("")
 
     def select_courses(self, config_helper, rename_list=None, skip_confirmation_prompts=False):
         """
@@ -151,6 +154,9 @@ class CanvasDownloadHelper:
     def __init__(self, api_key, canvas_api_heading="https://canvas.instructure.com"):
         self.canvas_api_heading = canvas_api_heading
         self.header = {"Authorization": f"Bearer {api_key.strip()}"}
+        logging.info("# CanvasDownloadHelper: initialized")
+        logging.info(f"  - Canvas API Heading: {self.canvas_api_heading}")
+        logging.info(f"  - Header: {self.header}")
 
     def download_course_files(self, course_id, save_path, param=None):
         if param is None:
@@ -203,7 +209,6 @@ class CanvasDownloadHelper:
         if param is None:
             param = {}
 
-        print(self.canvas_api_heading)
         response = requests.get(f"{self.canvas_api_heading}/api/v1/courses/{str(course_id)}/modules",
                                 headers=self.header, params=param)
 
@@ -292,16 +297,16 @@ class CanvasDownloadHelper:
                 # Get size in bytes of filepath
                 existing_size = os.path.getsize(file_path)
                 if existing_size == file_size:
-                    logging.info(colored(
-                        f"    - Skipping `{file_name}` (size: {file_size} bytes, existing_size: {existing_size} bytes)",
-                        "yellow"))
+                    logging.info(
+                            colored(f"    - Skipping `{file_name}` (size: {file_size} bytes, existing_size: {existing_size} bytes)",
+                                    "yellow"))
                     return False
-                logging.info(colored(
-                    f"    - Updating `{file_name}` (current size: {existing_size} bytes, new size: {file_size} bytes)",
-                    "green"))
+                logging.info(
+                        colored(f"    - Updating `{file_name}` (current size: {existing_size} bytes, new size: {file_size} bytes)",
+                                "green"))
             else:
-                logging.info(colored(f"    - Downloading `{file_name}` (size: {file_size} bytes, {file_size_mb} MB)",
-                                     "green"))
+                logging.info(
+                    colored(f"    - Downloading `{file_name}` (size: {file_size} bytes, {file_size_mb} MB)", "green"))
         else:
             logging.info(colored(f"    - Downloading `{file_name}`", "green"))
 
@@ -362,14 +367,14 @@ class CanvasDownloadHelper:
             existing_size = os.path.getsize(file_path)
             curr_size = len(soup.prettify().encode('utf-8'))
             if existing_size == curr_size:
-                logging.info(
-                        colored(f"       => Skipping `{file_name}` (size: {curr_size} bytes, existing_size: {existing_size} bytes)",
-                                "yellow"))
+                logging.info(colored(
+                    f"       => Skipping `{file_name}` (size: {curr_size} bytes, existing_size: {existing_size} bytes)",
+                    "yellow"))
                 return False
             else:
-                logging.info(
-                        colored(f"       => Updating `{file_name}` (current size: {existing_size} bytes, new size: {curr_size} bytes)",
-                                "green"))
+                logging.info(colored(
+                    f"       => Updating `{file_name}` (current size: {existing_size} bytes, new size: {curr_size} bytes)",
+                    "green"))
         else:
             logging.info(colored(f"       => Downloading `{file_name}`", "green"))
 
