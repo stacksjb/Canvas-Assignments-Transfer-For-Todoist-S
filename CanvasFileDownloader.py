@@ -4,7 +4,6 @@ import sys
 
 from helpers.CanvasHelper import CanvasHelper
 from helpers.ConfigHelper import ConfigHelper
-from helpers.NotificationHelper import NotificationHelper
 
 
 class CanvasFileDownloader:
@@ -26,24 +25,14 @@ class CanvasFileDownloader:
         logging.info("###################################################")
 
         if not self.skip_confirmation_prompts:
-            use_previous_input = input(
-                "Q: Would you like to download all files for these courses? (Y/n) ")
+            use_previous_input = input("Q: Would you like to download all files for these courses? (Y/n) ")
         else:
             use_previous_input = "y"
 
         if use_previous_input.lower() == "y":
             self.load_save_paths()
-            num_courses, num_files_total = self.canvas_helper.download_course_files_all(self.selected_course_ids,
-                                                                                        self.param)
-            if num_courses > 0 and num_files_total > 0:
-                NotificationHelper.send_notification("Canvas Files",
-                                                    f"Downloaded {num_files_total} files for {num_courses} courses")
-            num_courses, num_files_total = self.canvas_helper.download_module_files_all(self.selected_course_ids,
-                                                                                        self.param)
-
-            if num_courses > 0 and num_files_total > 0:
-                NotificationHelper.send_notification("Canvas Modules",
-                                                    f"Downloaded {num_files_total} files for {num_courses} courses")
+            self.canvas_helper.download_course_files_all(self.selected_course_ids, self.param)
+            self.canvas_helper.download_module_files_all(self.selected_course_ids, self.param)
 
     def load_save_paths(self):
         has_missing = False
@@ -58,8 +47,7 @@ class CanvasFileDownloader:
             for i, (c_id, c_obj) in enumerate(self.selected_course_ids.items()):
                 logging.info(f"  {i + 1}. {c_obj['name']}: `{c_obj['save_path']}`")
             if not self.skip_confirmation_prompts:
-                use_previous_input = input(
-                    "Q: Would you like to use the download paths selected last time? (Y/n) ")
+                use_previous_input = input("Q: Would you like to use the download paths selected last time? (Y/n) ")
             else:
                 use_previous_input = "y"
             logging.info("")
