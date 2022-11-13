@@ -21,8 +21,8 @@ class ConfigHelper:
             self.remove_config()
 
         self.config = self.load_config()
-        if not self.config:
-            self.create_config()
+        # if not self.config:
+        self.create_config()
 
     def get(self, key):
         return self.config[key] if key in self.config else None
