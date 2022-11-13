@@ -39,7 +39,7 @@ class ConfigHelper:
         # Load self.config file
         datetime_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         logging.info(f"  - Reading configuration... {datetime_str}")
-        logging.info(f"  -  Config Path: {self.config_path}")
+        logging.info(f"  - Config Path: {self.config_path}")
 
         config = {}
         try:
