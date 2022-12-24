@@ -14,6 +14,15 @@
       "contributions": [
         "code"
       ]
+    },
+    {
+      "login": "nsaripalli",
+      "name": "Nithin Saripalli",
+      "avatar_url": "https://avatars.githubusercontent.com/u/10299084?v=4",
+      "profile": "http://nithin.info",
+      "contributions": [
+        "bug"
+      ]
     }
   ],
   "contributorsPerLine": 7,
