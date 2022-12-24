@@ -1,6 +1,6 @@
 # Canvas-Transfer-For-Todoist
 <!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
-[![All Contributors](https://img.shields.io/badge/all_contributors-1-orange.svg?style=flat-square)](#contributors-)
+[![All Contributors](https://img.shields.io/badge/all_contributors-2-orange.svg?style=flat-square)](#contributors-)
 <!-- ALL-CONTRIBUTORS-BADGE:END -->
 
 not created by, affiliated with, or supported by Doist
@@ -59,6 +59,7 @@ Thanks to all the below for their contributions!
   <tbody>
     <tr>
       <td align="center"><a href="https://scottquach.com/"><img src="https://avatars.githubusercontent.com/u/11187380?v=4?s=100" width="100px;" alt="Scott Quach"/><br /><sub><b>Scott Quach</b></sub></a><br /><a href="https://github.com/stacksjb/Canvas-Assignments-Transfer-For-Todoist-S/commits?author=scottquach" title="Code">💻</a></td>
+      <td align="center"><a href="http://nithin.info"><img src="https://avatars.githubusercontent.com/u/10299084?v=4?s=100" width="100px;" alt="Nithin Saripalli"/><br /><sub><b>Nithin Saripalli</b></sub></a><br /><a href="https://github.com/stacksjb/Canvas-Assignments-Transfer-For-Todoist-S/issues?q=author%3Ansaripalli" title="Bug reports">🐛</a></td>
     </tr>
   </tbody>
 </table>
