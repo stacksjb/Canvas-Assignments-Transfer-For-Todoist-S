@@ -383,18 +383,25 @@ def transfer_assignments_to_todoist():
 def add_new_task(assignment, project_id):
     global limit_reached
     try:
+        due_datetime = assignment["due_at"]
+        deadline_date = None
+
+        if due_datetime:
+            try:
+                parsed_date = datetime.strptime(due_datetime, "%Y-%m-%dT%H:%M:%SZ")
+                deadline_date = parsed_date.strftime("%Y-%m-%d")
+            except ValueError:
+                pass  # Skip if date is invalid
+
         todoist_api.add_task(
-            content="["
-            + assignment["name"]
-            + "]("
-            + assignment["html_url"]
-            + ")"
-            + " Due",
+            content=f"[{assignment['name']}]({assignment['html_url']}) Due",
             project_id=project_id,
-            due_datetime=assignment["due_at"],
+            due_datetime=due_datetime,
+            deadline_date=deadline_date,
             labels=config["todoist_task_labels"],
             priority=config["todoist_task_priority"],
         )
+
     except Exception as error:
         print(
             f"Error while adding task: {error}, likely due to rate limiting. Try again in 15 minutes"
@@ -449,7 +456,22 @@ def canvas_assignment_stats():
 def update_task(assignment, task):
     global limit_reached
     try:
-        todoist_api.update_task(task_id=task.id, due_datetime=assignment["due_at"])
+        due_datetime = assignment["due_at"]
+        deadline_date = None
+
+        if due_datetime:
+            try:
+                parsed_date = datetime.strptime(due_datetime, "%Y-%m-%dT%H:%M:%SZ")
+                deadline_date = parsed_date.strftime("%Y-%m-%d")
+            except ValueError:
+                pass
+
+        todoist_api.update_task(
+            task_id=task.id,
+            due_datetime=due_datetime,
+            deadline_date=deadline_date,
+        )
+
     except Exception as error:
         print(f"Error while updating task: {error}")
         limit_reached = True
